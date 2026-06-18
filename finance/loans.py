@@ -247,8 +247,8 @@ def refinance_breakeven(
     """Compare staying on the current loan vs refinancing the remaining balance.
 
     Computes the periodic payment under each scenario using the module's own
-    loan_payment, reports monthly savings and the breakeven period to recoup
-    closing costs, and surfaces the lifetime interest trade-off so that a
+    loan_payment, reports the per-period savings and the breakeven period to
+    recoup closing costs, and surfaces the lifetime interest trade-off so that a
     longer new term's lower payment is weighed against its higher total cost.
 
     balance: outstanding principal. current_apr/new_apr: nominal annual rates.
@@ -269,25 +269,23 @@ def refinance_breakeven(
         raise ValueError("new_apr must be non-negative")
 
     ppy = money.periods_per_year(freq)
-    current_periods = round(current_remaining_years * ppy)
-    new_periods = round(new_term_years * ppy)
 
-    # Reuse loan_payment for both scenarios — single source of payment math.
+    # Reuse loan_payment for both scenarios — single source of payment AND
+    # lifetime-cost math. Its total_interest is derived from the unrounded
+    # payment (then rounded at the edge), so reading it back avoids the drift
+    # that recomputing from the already-rounded payment would introduce.
     current_info = loan_payment(balance, current_apr, current_remaining_years, freq)
     new_info = loan_payment(balance, new_apr, new_term_years, freq)
 
     current_payment = current_info["payment"]
     new_payment = new_info["payment"]
-    monthly_savings = money.round_cents(current_payment - new_payment)
+    periodic_savings = money.round_cents(current_payment - new_payment)
 
-    # Lifetime cost comparison (payment already rounded to cents, so multiply rounded values).
-    current_total_paid = current_payment * current_periods
-    new_total_paid = new_payment * new_periods
-    current_total_interest = money.round_cents(current_total_paid - balance)
-    new_total_interest = money.round_cents(new_total_paid - balance)
+    current_total_interest = current_info["total_interest"]
+    new_total_interest = new_info["total_interest"]
     lifetime_interest_savings = money.round_cents(current_total_interest - new_total_interest)
 
-    if monthly_savings <= 0:
+    if periodic_savings <= 0:
         breakeven_periods = None
         breakeven_years = None
         summary = (
@@ -296,10 +294,7 @@ def refinance_breakeven(
             f"New loan total interest: ${new_total_interest:,.2f} vs current: ${current_total_interest:,.2f}."
         )
     else:
-        if closing_costs == 0:
-            breakeven_periods = 0
-        else:
-            breakeven_periods = math.ceil(closing_costs / monthly_savings)
+        breakeven_periods = math.ceil(closing_costs / periodic_savings)
         breakeven_years = breakeven_periods / ppy
         term_note = (
             " Note: the new term is longer, which raises lifetime interest despite the lower payment."
@@ -307,7 +302,7 @@ def refinance_breakeven(
             else ""
         )
         summary = (
-            f"Refi saves ${monthly_savings:,.2f}/{freq} — closing costs recouped in {breakeven_periods} periods "
+            f"Refi saves ${periodic_savings:,.2f}/{freq} — closing costs recouped in {breakeven_periods} periods "
             f"({breakeven_years:.1f} years). "
             f"Lifetime interest: current ${current_total_interest:,.2f}, new ${new_total_interest:,.2f} "
             f"(${lifetime_interest_savings:,.2f} {'saved' if lifetime_interest_savings >= 0 else 'more'}).{term_note}"
@@ -315,9 +310,10 @@ def refinance_breakeven(
 
     return {
         "balance": money.round_cents(balance),
+        "frequency": freq,
         "current_payment": money.round_cents(current_payment),
         "new_payment": money.round_cents(new_payment),
-        "monthly_savings": monthly_savings,
+        "periodic_savings": periodic_savings,
         "breakeven_periods": breakeven_periods,
         "breakeven_years": breakeven_years,
         "current_total_interest": current_total_interest,

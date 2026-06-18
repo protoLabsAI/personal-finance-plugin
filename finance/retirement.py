@@ -300,12 +300,15 @@ def rmd(age: int, account_balance: float) -> dict:
     if account_balance < 0:
         raise ValueError("account_balance must be non-negative")
 
+    assumptions = {"distribution_table": "IRS Uniform Lifetime (2022+)", "rmd_start_age": 73}
+
     if age < 73:
         return {
             "age": age,
             "account_balance": money.round_cents(account_balance),
             "distribution_period": None,
             "rmd": 0.0,
+            "assumptions": assumptions,
             "summary": (f"No RMD required at age {age}. Under SECURE 2.0, RMDs begin at age 73. {_CAVEAT}"),
         }
 
@@ -319,6 +322,7 @@ def rmd(age: int, account_balance: float) -> dict:
         "account_balance": money.round_cents(account_balance),
         "distribution_period": distribution_period,
         "rmd": rmd_amount,
+        "assumptions": assumptions,
         "summary": (
             f"At age {age} with a ${money.round_cents(account_balance):,.2f} balance, "
             f"your RMD is ${rmd_amount:,.2f} (IRS Uniform Lifetime Table period: {distribution_period}). "
@@ -344,6 +348,10 @@ def social_security_estimate(
 
     Claiming before FRA reduces the benefit; claiming after FRA (up to 70) increases
     it by the delayed retirement credit (8%/year, i.e. 2/3% per month).
+
+    Simplifications: claim_age and full_retirement_age are taken as whole years
+    (sub-year precision is not modeled), and the 8%/year delayed credit assumes a
+    modern FRA (66–67 cohort). A standalone estimate, not financial advice.
     """
     if aime < 0:
         raise ValueError("aime must be non-negative")
@@ -376,8 +384,11 @@ def social_security_estimate(
         reduction_beyond_36 = max(0, months_early - 36) * (5 / 12 / 100)
         adjustment_factor = 1.0 - (reduction_first_36 + reduction_beyond_36)
 
-    monthly_benefit = money.round_cents(pia * adjustment_factor)
-    annual_benefit = money.round_cents(monthly_benefit * 12)
+    # Round only at the edge: derive annual from the unrounded monthly so the
+    # two figures can't disagree by a stray cent.
+    raw_monthly = pia * adjustment_factor
+    monthly_benefit = money.round_cents(raw_monthly)
+    annual_benefit = money.round_cents(raw_monthly * 12)
 
     if months_diff > 0:
         timing = f"claiming at {claim_age} (delayed, +{(adjustment_factor - 1):.1%} vs FRA)"
@@ -393,6 +404,11 @@ def social_security_estimate(
         "full_retirement_age": full_retirement_age,
         "monthly_benefit": monthly_benefit,
         "annual_benefit": annual_benefit,
+        "assumptions": {
+            "bend_points": [_SS_BEND_1, _SS_BEND_2],
+            "bend_points_year": 2024,
+            "delayed_retirement_credit_annual": 0.08,
+        },
         "summary": (
             f"With an AIME of ${aime:,.0f}/mo, your estimated PIA is ${money.round_cents(pia):,.2f}/mo; "
             f"{timing} yields ${monthly_benefit:,.2f}/mo (${annual_benefit:,.2f}/yr). "

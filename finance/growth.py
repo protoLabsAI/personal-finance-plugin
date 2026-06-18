@@ -146,6 +146,11 @@ def compare_apy(accounts: list[dict]) -> dict:
         rate = account["rate"]
         if not isinstance(rate, (int, float)):
             raise ValueError(f"account at index {i}: 'rate' must be numeric, got {rate!r}")
+        # rate <= -1 makes the compounding base (1 + rate/n) non-positive and the
+        # APY meaningless (e.g. rate=-2 monthly silently yields 0%). Match the
+        # money.inflation_factor convention and reject it outright.
+        if rate <= -1:
+            raise ValueError(f"account at index {i}: 'rate' must be greater than -1")
 
         freq = account["freq"]
         name = account.get("name", f"option {i + 1}")

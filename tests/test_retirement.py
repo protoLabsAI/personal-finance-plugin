@@ -421,8 +421,15 @@ def test_rmd_rejects_negative_age(retirement):
 
 def test_rmd_output_keys(retirement):
     out = retirement.rmd(75, 300_000)
-    for key in ("age", "account_balance", "distribution_period", "rmd", "summary"):
+    for key in ("age", "account_balance", "distribution_period", "rmd", "assumptions", "summary"):
         assert key in out
+
+
+def test_rmd_echoes_assumptions_both_paths(retirement):
+    # The module contract: every modeling tool echoes its inputs in an assumptions dict.
+    for out in (retirement.rmd(75, 300_000), retirement.rmd(70, 300_000)):
+        assert out["assumptions"]["rmd_start_age"] == 73
+        assert "Uniform Lifetime" in out["assumptions"]["distribution_table"]
 
 
 # ── social_security_estimate ─────────────────────────────────────────────────────
@@ -479,8 +486,18 @@ def test_ss_summary_has_caveat(retirement):
 
 def test_ss_output_keys(retirement):
     out = retirement.social_security_estimate(aime=3000)
-    for key in ("aime", "pia", "claim_age", "full_retirement_age", "monthly_benefit", "annual_benefit", "summary"):
+    for key in (
+        "aime",
+        "pia",
+        "claim_age",
+        "full_retirement_age",
+        "monthly_benefit",
+        "annual_benefit",
+        "assumptions",
+        "summary",
+    ):
         assert key in out
+    assert out["assumptions"]["bend_points_year"] == 2024
 
 
 def test_ss_rejects_negative_aime(retirement):

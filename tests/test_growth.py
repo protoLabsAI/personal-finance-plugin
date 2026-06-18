@@ -186,3 +186,11 @@ def test_compare_apy_rejects_missing_freq(growth):
 def test_compare_apy_rejects_non_numeric_rate(growth):
     with pytest.raises(ValueError):
         growth.compare_apy([{"rate": "five", "freq": "monthly"}])
+
+
+def test_compare_apy_rejects_rate_at_or_below_negative_one(growth):
+    """rate <= -1 makes the compounding base non-positive and the APY meaningless."""
+    with pytest.raises(ValueError):
+        growth.compare_apy([{"rate": -1, "freq": "monthly"}])
+    with pytest.raises(ValueError):
+        growth.compare_apy([{"rate": -24, "freq": "monthly"}])

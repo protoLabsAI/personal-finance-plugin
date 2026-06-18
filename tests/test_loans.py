@@ -197,7 +197,8 @@ def test_refinance_breakeven_golden(loans):
     # Payments computed by calling loan_payment internally — pin to module's own math.
     assert out["current_payment"] == pytest.approx(2120.34, abs=0.01)
     assert out["new_payment"] == pytest.approx(1753.77, abs=0.01)
-    assert out["monthly_savings"] == pytest.approx(366.57, abs=0.01)
+    assert out["periodic_savings"] == pytest.approx(366.57, abs=0.01)
+    assert out["frequency"] == "monthly"
     assert out["breakeven_periods"] == 17
     assert out["breakeven_years"] == pytest.approx(17 / 12, abs=0.01)
     assert out["balance"] == pytest.approx(300_000, abs=0.01)
@@ -213,13 +214,19 @@ def test_refinance_breakeven_lifetime_interest(loans):
         new_term_years=25,
         closing_costs=6_000,
     )
-    assert out["current_total_interest"] == pytest.approx(336_102.00, abs=0.01)
-    assert out["new_total_interest"] == pytest.approx(226_131.00, abs=0.01)
-    assert out["lifetime_interest_savings"] == pytest.approx(109_971.00, abs=0.01)
+    # Lifetime interest must equal the module's own loan_payment figures exactly
+    # (no drift from recomputing off the rounded payment).
+    ln_cur = loans.loan_payment(300_000, 0.07, 25)
+    ln_new = loans.loan_payment(300_000, 0.05, 25)
+    assert out["current_total_interest"] == pytest.approx(ln_cur["total_interest"], abs=0.01)
+    assert out["new_total_interest"] == pytest.approx(ln_new["total_interest"], abs=0.01)
+    assert out["lifetime_interest_savings"] == pytest.approx(
+        round(ln_cur["total_interest"] - ln_new["total_interest"], 2), abs=0.01
+    )
 
 
 def test_refinance_breakeven_no_savings_when_new_rate_higher(loans):
-    """When the new APR is higher, monthly_savings <= 0 → breakeven_periods is None."""
+    """When the new APR is higher, periodic_savings <= 0 → breakeven_periods is None."""
     out = loans.refinance_breakeven(
         balance=200_000,
         current_apr=0.04,
@@ -228,7 +235,7 @@ def test_refinance_breakeven_no_savings_when_new_rate_higher(loans):
         new_term_years=20,
         closing_costs=5_000,
     )
-    assert out["monthly_savings"] == pytest.approx(-220.90, abs=0.01)
+    assert out["periodic_savings"] == pytest.approx(-220.90, abs=0.01)
     assert out["breakeven_periods"] is None
     assert out["breakeven_years"] is None
     assert "no breakeven" in out["summary"].lower() or "not lower" in out["summary"].lower()
@@ -246,6 +253,20 @@ def test_refinance_breakeven_zero_closing_costs(loans):
     )
     assert out["breakeven_periods"] == 0
     assert out["breakeven_years"] == pytest.approx(0.0, abs=0.01)
+
+
+def test_refinance_breakeven_zero_apr_no_phantom_interest(loans):
+    """At 0% APR lifetime interest is exactly 0 — not a tiny negative from rounding
+    payment*periods (the figure comes straight from loan_payment)."""
+    out = loans.refinance_breakeven(
+        balance=120_000,
+        current_apr=0.0,
+        current_remaining_years=10,
+        new_apr=0.04,
+        new_term_years=30,
+        closing_costs=3_000,
+    )
+    assert out["current_total_interest"] == 0.0
 
 
 def test_refinance_breakeven_has_summary_string(loans):

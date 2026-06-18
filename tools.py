@@ -122,9 +122,9 @@ def refinance_breakeven(
     freq: str = "monthly",
 ) -> dict:
     """Compare staying on a loan vs refinancing the remaining balance: periodic
-    payment under each, monthly savings, and how many periods of savings recoup
-    the closing costs (breakeven). Also reports lifetime interest under each —
-    a longer new term can raise total interest even when the payment drops."""
+    payment under each, the per-period savings, and how many periods of savings
+    recoup the closing costs (breakeven). Also reports lifetime interest under
+    each — a longer new term can raise total interest even when the payment drops."""
     return loans.refinance_breakeven(
         balance, current_apr, current_remaining_years, new_apr, new_term_years, closing_costs, freq
     )
