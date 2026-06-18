@@ -132,6 +132,13 @@ def test_rate_raises_when_no_root(tvm):
         tvm.rate(10, 100, 100, 100)
 
 
+def test_rate_no_root_with_fractional_nper_raises_cleanly(tvm):
+    # A no-root case where Newton can step below -1 and (1+r)**nper goes complex:
+    # must surface as ConvergenceError, never an uncaught TypeError.
+    with pytest.raises(tvm.ConvergenceError):
+        tvm.rate(2.5, 100, 100, 100)
+
+
 # ── irr ───────────────────────────────────────────────────────────────────────
 def test_irr_basic(tvm):
     assert tvm.irr([-100, 39, 59, 55, 20]) == pytest.approx(0.28094842115996066, abs=TOL)

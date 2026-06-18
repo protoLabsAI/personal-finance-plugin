@@ -143,7 +143,9 @@ def rate(
         except (ZeroDivisionError, ValueError, OverflowError):
             break
         rnp1 = rn - step
-        if not math.isfinite(rnp1):
+        # A Newton step below -1 makes (1+r)**nper complex for non-integer nper;
+        # treat that (and any non-finite) as divergence → fall back to bisection.
+        if isinstance(rnp1, complex) or not math.isfinite(rnp1):
             break
         if abs(rnp1 - rn) < tol:
             return rnp1
