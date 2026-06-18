@@ -70,3 +70,30 @@ def test_money_returns_decimal(money):
 def test_money_sum_avoids_float_drift(money):
     total = sum((money.money(0.1) for _ in range(3)), money.money(0))
     assert total == Decimal("0.3")  # 0.1*3 != 0.3 in float, but exact in Decimal
+
+
+# ── validate_detail ───────────────────────────────────────────────────────────
+def test_validate_detail_accepts_summary_and_full(money):
+    assert money.validate_detail("summary") is None
+    assert money.validate_detail("full") is None
+
+
+def test_validate_detail_rejects_other(money):
+    with pytest.raises(ValueError):
+        money.validate_detail("verbose")
+
+
+# ── inflation_factor ──────────────────────────────────────────────────────────
+def test_inflation_factor_compounds(money):
+    assert money.inflation_factor(0.03, 10) == pytest.approx(1.03**10)
+
+
+def test_inflation_factor_years_zero_is_one(money):
+    assert money.inflation_factor(0.05, 0) == 1.0
+
+
+def test_inflation_factor_rejects_rate_at_or_below_minus_one(money):
+    with pytest.raises(ValueError):
+        money.inflation_factor(-1.0, 5)
+    with pytest.raises(ValueError):
+        money.inflation_factor(-2.0, 2.5)

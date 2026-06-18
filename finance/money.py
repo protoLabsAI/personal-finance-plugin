@@ -11,7 +11,15 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
-__all__ = ["PERIODS_PER_YEAR", "periods_per_year", "periodic_rate", "round_cents", "money"]
+__all__ = [
+    "PERIODS_PER_YEAR",
+    "periods_per_year",
+    "periodic_rate",
+    "round_cents",
+    "money",
+    "validate_detail",
+    "inflation_factor",
+]
 
 # How many compounding/payment periods a given frequency has in one year.
 PERIODS_PER_YEAR: dict[str, int] = {
@@ -54,3 +62,19 @@ def money(value) -> Decimal:
     if isinstance(value, Decimal):
         return value
     return Decimal(str(value))
+
+
+def validate_detail(detail: str) -> None:
+    """Validate a tool's output-verbosity flag. Shared so every tool gates its
+    large output the same way (plan §5)."""
+    if detail not in ("summary", "full"):
+        raise ValueError("detail must be 'summary' or 'full'")
+
+
+def inflation_factor(rate: float, years: float) -> float:
+    """The compounding factor ``(1 + rate) ** years`` used to move money between
+    today's and future dollars. Rejects rate <= -1 (a deflation of -100% or more
+    is undefined) so callers get a clear error, not a complex/zero result."""
+    if rate <= -1:
+        raise ValueError("rate must be greater than -1 (a deflation of -100% or more is undefined)")
+    return (1 + rate) ** years
