@@ -8,8 +8,9 @@ on:
 
 jobs:
   test:
-    # The org's Namespace Linux profile; override NSC_RUNNER on a fork that lacks it.
-    runs-on: ${{ vars.NSC_RUNNER || 'namespace-profile-protolabs-linux' }}
+    # Set the NSC_RUNNER repo variable to the org's Namespace Linux profile to
+    # use it; otherwise falls back to GitHub-hosted ubuntu-latest.
+    runs-on: ${{ vars.NSC_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
