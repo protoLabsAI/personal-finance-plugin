@@ -10,7 +10,7 @@ config_section: personal_finance
 config:
   default_inflation_rate: 0.03   # used when a tool's inflation input is omitted
   default_withdrawal_rate: 0.04  # safe-withdrawal default
-  currency: USD
+  currency: USD                  # reserved (plan §8): surfaced to the agent via the skill; not yet consumed by tools
   advanced_tools: false          # §5 opt-in for the niche/advanced tools
 settings:
   - { key: default_inflation_rate, label: "Default inflation rate", type: number }

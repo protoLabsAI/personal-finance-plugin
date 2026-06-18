@@ -339,3 +339,137 @@ def test_detect_recurring_detail_summary_hides_list(normalize):
 def test_detect_recurring_rejects_bad_detail(normalize):
     with pytest.raises(ValueError):
         normalize.detect_recurring([], detail="loud")
+
+
+# ── detect_recurring: nearest-cadence-within-tolerance (item 1) ───────────────
+def test_detect_recurring_quarterly(normalize):
+    # ~91d gaps must classify as quarterly, not fall through as irregular.
+    txns = [
+        _canon("2024-01-01", -30.0, "QuarterlyCo", "Subscriptions"),
+        _canon("2024-04-01", -30.0, "QuarterlyCo", "Subscriptions"),
+        _canon("2024-07-01", -30.0, "QuarterlyCo", "Subscriptions"),
+        _canon("2024-10-01", -30.0, "QuarterlyCo", "Subscriptions"),
+    ]
+    out = normalize.detect_recurring(txns)
+    r = next(x for x in out["recurring"] if x["merchant"] == "QuarterlyCo")
+    assert r["cadence"] == "quarterly"
+
+
+def test_detect_recurring_every_three_weeks_is_biweekly_nearest(normalize):
+    # ~21d gaps: closest target is biweekly(14) at +50% (out of tol) vs
+    # monthly(30.44) at -31% (out of tol) -> irregular, not recurring.
+    txns = [
+        _canon("2024-01-01", -10.0, "ThreeWk", "Other"),
+        _canon("2024-01-22", -10.0, "ThreeWk", "Other"),
+        _canon("2024-02-12", -10.0, "ThreeWk", "Other"),
+        _canon("2024-03-04", -10.0, "ThreeWk", "Other"),
+    ]
+    out = normalize.detect_recurring(txns)
+    assert all(x["merchant"] != "ThreeWk" for x in out["recurring"])
+
+
+def test_detect_recurring_irregular_large_gap_not_recurring(normalize):
+    # ~50d median gap: not within +-15% of any cadence target -> irregular.
+    txns = [
+        _canon("2024-01-01", -10.0, "Irregular", "Other"),
+        _canon("2024-02-20", -10.0, "Irregular", "Other"),
+        _canon("2024-04-10", -10.0, "Irregular", "Other"),
+    ]
+    out = normalize.detect_recurring(txns)
+    assert all(x["merchant"] != "Irregular" for x in out["recurring"])
+
+
+# ── detect_recurring: cadence-derived next_due (item 2) ───────────────────────
+def test_detect_recurring_weekly_next_due_uses_median_gap(normalize):
+    # Median gap of 8 days -> next_due = last + 8 (observed gap, not fixed 7).
+    txns = [
+        _canon("2024-01-01", -12.0, "Gym8", "Health"),
+        _canon("2024-01-09", -12.0, "Gym8", "Health"),
+        _canon("2024-01-17", -12.0, "Gym8", "Health"),
+        _canon("2024-01-25", -12.0, "Gym8", "Health"),
+    ]
+    out = normalize.detect_recurring(txns)
+    r = next(x for x in out["recurring"] if x["merchant"] == "Gym8")
+    assert r["cadence"] == "weekly"
+    assert r["next_due"] == "2024-02-02"  # 2024-01-25 + 8 days
+
+
+def test_detect_recurring_quarterly_next_due_calendar(normalize):
+    txns = [
+        _canon("2024-01-01", -30.0, "QuarterlyCo", "Subscriptions"),
+        _canon("2024-04-01", -30.0, "QuarterlyCo", "Subscriptions"),
+        _canon("2024-07-01", -30.0, "QuarterlyCo", "Subscriptions"),
+        _canon("2024-10-01", -30.0, "QuarterlyCo", "Subscriptions"),
+    ]
+    out = normalize.detect_recurring(txns)
+    r = next(x for x in out["recurring"] if x["merchant"] == "QuarterlyCo")
+    assert r["next_due"] == "2025-01-01"  # last + 3 calendar months
+
+
+# ── detect_recurring: detail gates occurrences list (item 3) ──────────────────
+def test_detect_recurring_full_adds_occurrences(normalize):
+    txns = [
+        _canon("2024-01-05", -15.99, "Netflix", "Subscriptions"),
+        _canon("2024-02-05", -15.99, "Netflix", "Subscriptions"),
+        _canon("2024-03-05", -15.99, "Netflix", "Subscriptions"),
+    ]
+    out = normalize.detect_recurring(txns, detail="full")
+    r = out["recurring"][0]
+    assert r["occurrences"] == 3  # count is still present
+    assert r["occurrences_list"] == [
+        {"date": "2024-01-05", "amount": -15.99},
+        {"date": "2024-02-05", "amount": -15.99},
+        {"date": "2024-03-05", "amount": -15.99},
+    ]
+
+
+def test_detect_recurring_summary_omits_occurrences(normalize):
+    txns = [
+        _canon("2024-01-05", -15.99, "Netflix", "Subscriptions"),
+        _canon("2024-02-05", -15.99, "Netflix", "Subscriptions"),
+        _canon("2024-03-05", -15.99, "Netflix", "Subscriptions"),
+    ]
+    out = normalize.detect_recurring(txns, detail="summary")
+    r = out["recurring"][0]
+    assert "occurrences_list" not in r
+
+
+# ── dedupe uses full-precision amount (item 4) ────────────────────────────────
+def test_normalize_subcent_amounts_not_deduped(normalize):
+    raw = [
+        {"date": "2024-01-01", "amount": -10.004, "merchant": "Cafe", "account": "Checking"},
+        {"date": "2024-01-01", "amount": -10.001, "merchant": "Cafe", "account": "Checking"},
+    ]
+    out = normalize.normalize_transactions(raw)
+    # Both round to -10.00 at the cents edge but differ in sub-cent precision;
+    # they must NOT collapse into one row.
+    assert out["count"] == 2
+    assert out["removed_duplicates"] == 0
+
+
+# ── _parse_date: broadened formats (item 5) ───────────────────────────────────
+def test_normalize_accepts_us_slash_date(normalize):
+    raw = [{"date": "01/15/2024", "amount": -10.0, "merchant": "A"}]
+    out = normalize.normalize_transactions(raw)
+    assert out["transactions"][0]["date"] == "2024-01-15"
+
+
+def test_normalize_accepts_iso_slash_date(normalize):
+    raw = [{"date": "2024/01/15", "amount": -10.0, "merchant": "A"}]
+    out = normalize.normalize_transactions(raw)
+    assert out["transactions"][0]["date"] == "2024-01-15"
+
+
+def test_normalize_accepts_unpadded_iso_date(normalize):
+    raw = [{"date": "2024-1-5", "amount": -10.0, "merchant": "A"}]
+    out = normalize.normalize_transactions(raw)
+    assert out["transactions"][0]["date"] == "2024-01-05"
+
+
+def test_normalize_still_raises_on_unparseable_date(normalize):
+    raw = [
+        {"date": "2024-01-01", "amount": -10.0, "merchant": "A"},
+        {"date": "not-a-date", "amount": -10.0, "merchant": "B"},
+    ]
+    with pytest.raises(ValueError, match="1"):
+        normalize.normalize_transactions(raw)

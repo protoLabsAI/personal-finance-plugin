@@ -68,6 +68,22 @@ def test_budget_breakdown_needs_over_50pct_flag(budget):
     assert "needs_over_50pct" in out["flags"]
 
 
+def test_budget_breakdown_needs_over_50pct_flag_in_flags_and_summary(budget):
+    # The needs_over_50pct flag must appear in out["flags"] AND be reflected in
+    # the summary's "Flags:" listing (flags assembled before out/summary built).
+    out = budget.budget_breakdown(
+        4000,
+        {"rent": 2200, "fun": 300},
+        needs_categories=["rent"],
+    )
+    assert "needs_over_50pct" in out["flags"]
+    assert "Flags:" in out["summary"]
+    assert "needs_over_50pct" in out["summary"]
+    # Every flag in the list is mentioned in the summary, and vice versa.
+    for flag in out["flags"]:
+        assert flag in out["summary"]
+
+
 def test_budget_breakdown_needs_under_50pct_no_flag(budget):
     out = budget.budget_breakdown(
         5000,

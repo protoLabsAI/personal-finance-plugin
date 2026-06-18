@@ -28,6 +28,8 @@ class ConvergenceError(ValueError):
 
 def fv(rate: float, nper: float, pmt: float, pv: float, when: int = 0) -> float:
     """Future value of a cash-flow stream. Closed form."""
+    if rate <= -1:
+        raise ValueError("rate must be greater than -1")
     if rate == 0:
         return -(pv + pmt * nper)
     growth = (1 + rate) ** nper
@@ -37,6 +39,8 @@ def fv(rate: float, nper: float, pmt: float, pv: float, when: int = 0) -> float:
 
 def pv(rate: float, nper: float, pmt: float, fv: float = 0.0, when: int = 0) -> float:
     """Present value of a cash-flow stream. Closed form."""
+    if rate <= -1:
+        raise ValueError("rate must be greater than -1")
     if rate == 0:
         return -(fv + pmt * nper)
     growth = (1 + rate) ** nper
@@ -46,6 +50,8 @@ def pv(rate: float, nper: float, pmt: float, fv: float = 0.0, when: int = 0) -> 
 
 def pmt(rate: float, nper: float, pv: float, fv: float = 0.0, when: int = 0) -> float:
     """Level payment per period. Closed form."""
+    if rate <= -1:
+        raise ValueError("rate must be greater than -1")
     if rate == 0:
         return -(fv + pv) / nper
     growth = (1 + rate) ** nper

@@ -1,47 +1,54 @@
 # Cleanup backlog
 
-Deferred quality items surfaced by code review. None are correctness bugs for
-normal inputs (those were fixed inline); these are efficiency, simplification,
-altitude, and convention improvements to tackle **after** the integration layer.
+Deferred quality items surfaced by code review. The bulk were resolved in the
+cleanup pass (see git history); only the item below remains, intentionally
+deferred.
 
-## Cross-module
+## Open
 
-- [ ] **Shared `detail` validation.** The `if detail not in ("summary","full"): raise ValueError` check is copy-pasted across `budget.py` (×3), `disruption.py`, `normalize.py`. Extract a `money._validate_detail(detail)` helper (alongside `periods_per_year`/`round_cents`).
-- [ ] **Shared inflation factor.** `(1+rate)**years` is hand-rolled in `inflation.py`, `growth.py` (real-FV discount), and `retirement.py` (real return). Centralize as one helper so the sign/convention lives in one place.
+- [ ] **`rate`/`irr` step-size-only convergence (tvm.py).** Newton accepts
+  `abs(step) < tol` without checking the residual is ~0, so a stall could
+  theoretically return a non-root. Deferred deliberately: a naive absolute
+  residual guard destabilizes the golden tests because residual magnitude
+  scales with cash-flow size — this needs a *scaled* residual check, designed
+  and verified carefully against the full golden suite.
 
-## normalize.py
+## Resolved in the cleanup pass
 
-- [ ] **`detect_recurring` cadence gaps.** Median gaps of ~16–27d and ~32–359d match no bucket (e.g. quarterly ~90d, every-3-weeks ~21d) and the charge is dropped as irregular. Widen/parameterize the cadence buckets.
-- [ ] **`detect_recurring` `next_due`.** Weekly/biweekly add a fixed 7/14-day step rather than the observed median gap, so `next_due` isn't truly derived from the data spacing.
-- [ ] **`detect_recurring` unused `detail` param.** Validated but has no behavioral effect ("full" returns identical output). Either drop it or make "full" add per-occurrence rows.
-- [ ] **Dedupe key edges.** Key rounds amount to cents (sub-cent distinct txns collapse) and a missing `account` ('') makes same day/amount/merchant always dedupe. Consider including a stable index or raw amount.
-- [ ] **`_parse_date` format surface.** Only ISO `YYYY-MM-DD` (with optional time) parses; `01/15/2024`, `2024-1-5`, epoch ints raise. Documented as "raises", but the accepted surface is narrower than connectors may emit — broaden parsing.
+Cross-module
+- [x] Shared `detail` validation → `money.validate_detail` (used by budget ×3,
+  disruption, normalize, growth, loans).
+- [x] Shared inflation factor → `money.inflation_factor` (inflation.py, growth.py).
 
-## retirement.py
+normalize.py
+- [x] `detect_recurring` cadence gaps → nearest-cadence-within-±15% (quarterly etc. now detected).
+- [x] `detect_recurring` `next_due` derived from the observed cadence/median gap.
+- [x] `detect_recurring` `detail='full'` now adds an `occurrences_list`.
+- [x] Dedupe key uses full-precision amount (no sub-cent collapse).
+- [x] `_parse_date` accepts ISO, `MM/DD/YYYY`, `YYYY/MM/DD`, unpadded ISO.
 
-- [ ] **`safe_withdrawal` `horizon` is inert.** It doesn't affect `sustainable_income = nest_egg*rate` or `required_nest_egg = target_income/rate`; it only appears in echoed dicts and summary text. Either make the model horizon-sensitive or document it as a pure echo.
-- [ ] **`safe_withdrawal` duplicate echo.** `rate`/`horizon` appear at the top level AND inside `assumptions`; the two return branches duplicate the whole dict shape. `retirement_projection` echoes assumptions only in `assumptions` — pick one convention across both tools.
-- [ ] **`_depletion_age` uses `round_cents` on an age.** Currency rounding applied to an age yields e.g. "age 68.37". Use a sensible age precision (note: existing tests pin 2-decimal values, so update those tests when changing).
+retirement.py
+- [x] `safe_withdrawal` horizon documented as horizon-independent (not faked).
+- [x] `safe_withdrawal` single result dict; rate/horizon echoed only in `assumptions`.
+- [x] `_depletion_age` rounds an age to 1 decimal (not `round_cents`).
 
-## disruption.py
+disruption.py
+- [x] `income_disruption_runway` builds per-month rows only when `detail='full'`.
 
-- [ ] **`income_disruption_runway` builds rows in summary mode.** The full per-month rows list (up to `_MAX_MONTHS`) is built + rounded on every call but only attached when `detail=='full'`. Gate row construction behind `detail=='full'` (mirror `loans._amortization_rows`).
+budget.py
+- [x] `budget_breakdown` computes all flags before assembling the result.
 
-## budget.py
+integration layer
+- [x] `retirement_projection`/`compound_growth` wrapper docstrings clarify the
+  inflation-default behavior.
+- [x] `currency` documented as reserved (plan §8) in the manifest.
+- [x] Rate defaults promoted to `DEFAULT_INFLATION_RATE`/`DEFAULT_WITHDRAWAL_RATE`
+  constants with a manifest drift-guard test.
+- [x] Tool-name rosters exported from `tools.py` as the single source of truth.
+- [x] `build_tools` forwarders moved to module level; only the 4 config-consuming
+  tools stay in the closure.
+- [x] `time_value_of_money` dispatch collapsed into one table.
 
-- [ ] **`budget_breakdown` flags aliasing.** The `needs_over_50pct` flag is appended to `out["flags"]` after `out` is built, relying on list identity and on the summary being assembled afterward. Compute all flags before assembling `out`/summary.
-
-## Integration layer (tools.py / manifest)
-
-- [ ] **`retirement_projection` inflation-default shape inconsistency.** The wrapper injects the config inflation default when `inflation_rate` is omitted, but the engine only adds the `real` block when `inflation_rate > 0`. So omitting the arg silently switches on a 3% real-dollar view, while passing explicit `0.0` suppresses it. Make the behavior consistent (and match the docstring).
-- [ ] **Dead `currency` config knob.** `currency` is declared in the manifest `config` + `settings` but never read by any tool or engine function; SKILL.md tells the agent to "report the currency." Either wire it through (e.g. default-currency for `normalize_transactions`, label outputs) or drop the setting.
-- [ ] **Duplicated rate defaults.** `tools.py` hardcodes `0.03`/`0.04` fallbacks in `config.get(...)` that duplicate the manifest `config` defaults — drift risk if the manifest changes. Single source of truth.
-- [ ] **Tool-name rosters duplicated 3×.** `CORE_NAMES`/`ADVANCED_NAMES` live in `tests/test_tools.py`, `tests/test_personal_finance.py`, and implicitly the lists in `tools.py`. Derive the test sets from `build_tools({})` or export them from `tools.py`.
-- [ ] **`build_tools` is one ~330-line closure.** Only 4 of the wrappers use the config defaults; the other ~19 are pure forwarders that gain nothing from the closure and can't be imported/tested individually. Consider module-level tools for the forwarders + a small closure (or `functools.partial`) for the 4 that need config.
-- [ ] **`time_value_of_money` dispatch duplication.** The `required` dict and the if/elif call chain restate the same per-`solve_for` mapping twice. Collapse into one table mapping `solve_for -> (required_tuple, callable)`.
-
-## tvm.py / loans.py (earlier deferrals)
-
-- [ ] **`rate`/`irr` step-size-only convergence.** Newton accepts `abs(step) < tol` without checking the residual is ~0, so a stall could return a non-root. (Theoretical; a naive absolute-residual guard risks destabilizing golden tests because residual magnitude scales with cash-flow size — needs a scaled check.)
-- [ ] **`fv`/`pv`/`pmt` complex results.** For `rate < -1` and non-integer `nper`, `(1+rate)**nper` returns a complex number silently. Invalid financial domain, but unguarded.
-- [ ] **`debt_payoff_strategy` drops balance-0 debts.** A debt input with `balance == 0` is filtered out of `active` and never appears in `payoff_order`.
+tvm.py / loans.py
+- [x] `fv`/`pv`/`pmt` reject `rate <= -1` (no silent complex result).
+- [x] `debt_payoff_strategy` reports already-cleared (balance 0) debts in `payoff_order`.

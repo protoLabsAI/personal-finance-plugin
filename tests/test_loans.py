@@ -150,6 +150,20 @@ def test_payoff_order_follows_attack_order_on_same_month_clear(loans):
     assert out["payoff_order"] == ["HighAPR", "LowAPR"]
 
 
+def test_payoff_order_includes_already_cleared_zero_balance_debt(loans):
+    # A debt that starts at balance 0 is already paid off. It must still be
+    # reported in payoff_order (prepended, in input order) even though the
+    # simulation loop never touches it.
+    debts = [
+        {"name": "PaidOff", "balance": 0, "apr": 0.10, "min_payment": 0},
+        {"name": "Active", "balance": 1000, "apr": 0.15, "min_payment": 25},
+    ]
+    out = loans.debt_payoff_strategy(debts, budget=500, method="avalanche")
+    assert "PaidOff" in out["payoff_order"]
+    assert out["payoff_order"][0] == "PaidOff"
+    assert out["payoff_order"] == ["PaidOff", "Active"]
+
+
 # ── debt_to_income ────────────────────────────────────────────────────────────
 def test_dti_front_and_back_end(loans):
     out = loans.debt_to_income(gross_monthly_income=6000, housing_payment=1500, other_debt_payments=500)

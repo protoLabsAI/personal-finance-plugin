@@ -60,37 +60,33 @@ def income_disruption_runway(
         raise ValueError("essential_monthly_burn must be non-negative")
     if not 0 <= discretionary_cut_pct <= 1:
         raise ValueError("discretionary_cut_pct must be between 0 and 1")
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
 
     reduced_burn = essential_monthly_burn * (1 - discretionary_cut_pct)
     benefit_monthly = weekly_benefit * _WEEKS_PER_MONTH
     benefit_months = max_benefit_weeks * _MONTHS_PER_WEEK
     monthly_net_burn = reduced_burn - other_monthly_income - benefit_monthly
 
-    balance = liquid_savings + severance
+    starting_balance = liquid_savings + severance
     full_benefit_months = math.floor(benefit_months)
     fractional = benefit_months - full_benefit_months
 
-    rows: list[dict] = []
+    def _benefit_for(month: int) -> float:
+        if month <= full_benefit_months:
+            return benefit_monthly
+        if month == full_benefit_months + 1 and fractional > 0:
+            return benefit_monthly * fractional
+        return 0.0
+
+    # Walk the running balance to find the runway; the per-month rows are only
+    # materialized for detail='full' (mirrors loans.py building its schedule
+    # only when asked). The balance walk is identical in both modes, so the
+    # figures match byte-for-byte.
+    balance = starting_balance
     months_of_runway: int | None = None
     for month in range(1, _MAX_MONTHS + 1):
-        if month <= full_benefit_months:
-            benefit = benefit_monthly
-        elif month == full_benefit_months + 1 and fractional > 0:
-            benefit = benefit_monthly * fractional
-        else:
-            benefit = 0.0
-        inflow = other_monthly_income + benefit
+        inflow = other_monthly_income + _benefit_for(month)
         balance += inflow - reduced_burn
-        rows.append(
-            {
-                "month": month,
-                "inflow": money.round_cents(inflow),
-                "burn": money.round_cents(reduced_burn),
-                "balance": money.round_cents(balance),
-            }
-        )
         if balance < 0:
             months_of_runway = month - 1
             break
@@ -106,7 +102,7 @@ def income_disruption_runway(
         "reduced_monthly_burn": money.round_cents(reduced_burn),
         "benefit_monthly": money.round_cents(benefit_monthly),
         "benefit_months": benefit_months,
-        "starting_balance": money.round_cents(liquid_savings + severance),
+        "starting_balance": money.round_cents(starting_balance),
         "summary": (
             f"Runway: {runway_phrase}. Reduced burn ${money.round_cents(reduced_burn):,.2f}/mo, "
             f"benefit ${money.round_cents(benefit_monthly):,.2f}/mo for {benefit_months:g} months. "
@@ -114,6 +110,23 @@ def income_disruption_runway(
         ),
     }
     if detail == "full":
+        # Rebuild the same walk, recording one row per simulated month up to and
+        # including the month the balance crosses below zero.
+        rows: list[dict] = []
+        balance = starting_balance
+        for month in range(1, _MAX_MONTHS + 1):
+            inflow = other_monthly_income + _benefit_for(month)
+            balance += inflow - reduced_burn
+            rows.append(
+                {
+                    "month": month,
+                    "inflow": money.round_cents(inflow),
+                    "burn": money.round_cents(reduced_burn),
+                    "balance": money.round_cents(balance),
+                }
+            )
+            if balance < 0:
+                break
         out["scenario"] = rows
     return out
 

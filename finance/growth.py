@@ -36,8 +36,7 @@ def compound_growth(
         raise ValueError("contribution must be non-negative")
     if years <= 0:
         raise ValueError("years must be positive")
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
 
     ppy = money.periods_per_year(freq)
     periods = round(years * ppy)
@@ -67,7 +66,7 @@ def compound_growth(
     }
 
     if inflation_rate is not None:
-        real_fv = nominal_fv / (1 + inflation_rate) ** years
+        real_fv = nominal_fv / money.inflation_factor(inflation_rate, years)
         out["inflation_rate"] = inflation_rate
         out["real_fv"] = money.round_cents(real_fv)
         out["summary"] += f" In today's dollars: ${money.round_cents(real_fv):,.2f}."

@@ -26,10 +26,8 @@ def inflation_adjust(amount: float, rate: float, years: float, direction: str = 
         raise ValueError("direction must be 'to_future' or 'to_present'")
     if years < 0:
         raise ValueError("years must be non-negative")
-    if rate <= -1:
-        raise ValueError("rate must be greater than -1 (a deflation of -100% or more is undefined)")
 
-    factor = (1 + rate) ** years
+    factor = money.inflation_factor(rate, years)
     adjusted = amount * factor if direction == "to_future" else amount / factor
 
     if direction == "to_future":

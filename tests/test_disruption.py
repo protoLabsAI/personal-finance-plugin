@@ -116,6 +116,17 @@ def test_runway_summary_omits_scenario(disruption):
     assert "scenario" not in out
 
 
+def test_runway_summary_and_full_figures_identical(disruption):
+    # detail='full' only adds the scenario table; every other figure (and the
+    # summary string) must be byte-for-byte identical to detail='summary'.
+    kwargs = dict(weekly_benefit=300, max_benefit_weeks=30, other_monthly_income=250, discretionary_cut_pct=0.15)
+    summary = disruption.income_disruption_runway(12000, 3000, **kwargs)
+    full = disruption.income_disruption_runway(12000, 3000, detail="full", **kwargs)
+    assert "scenario" not in summary
+    assert "scenario" in full
+    assert {k: v for k, v in full.items() if k != "scenario"} == summary
+
+
 def test_runway_has_not_advice_note(disruption):
     out = disruption.income_disruption_runway(12000, 3000)
     assert "not financial advice" in out["summary"].lower()

@@ -77,8 +77,7 @@ def loan_amortization(
 ) -> dict:
     """Amortization for a loan. detail='summary' returns totals only; detail='full'
     adds a per-period `schedule` (period, payment, principal, interest, balance)."""
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
     base = loan_payment(principal, apr, term_years, freq)
     if detail == "full":
         rate = money.periodic_rate(apr, freq)
@@ -139,7 +138,9 @@ def _simulate_payoff(debts: list[dict], budget: float, method: str) -> dict:
     ]
     months = 0
     total_interest = 0.0
-    order: list[str] = []
+    # Debts that start already paid off never enter the simulation loop, but
+    # should still be reported as cleared (in input order, before any others).
+    order: list[str] = [d["name"] for d in state if d["balance"] <= 1e-9]
     while any(d["balance"] > 1e-9 for d in state):
         months += 1
         if months > _MAX_MONTHS:

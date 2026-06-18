@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 import statistics
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from . import money
 
@@ -143,11 +143,24 @@ def _first(row: dict, keys: tuple[str, ...]):
 
 
 def _parse_date(value) -> str:
-    """Parse an ISO-ish date into a canonical 'YYYY-MM-DD' string. Raises on
+    """Parse a date into a canonical 'YYYY-MM-DD' string. Accepts ISO
+    'YYYY-MM-DD' (with an optional time suffix), zero-unpadded ISO like
+    '2024-1-5', 'YYYY/MM/DD', and US 'MM/DD/YYYY'. Raises ValueError on
     anything unparseable so the caller can flag the offending row."""
     text = str(value).strip()
-    # Tolerate a trailing time component ('2024-01-15T00:00:00').
-    return date.fromisoformat(text[:10]).isoformat()
+    # Tolerate a trailing time component ('2024-01-15T00:00:00') / 'T' or space.
+    head = re.split(r"[T ]", text, maxsplit=1)[0]
+    # Try strict ISO first (fast path, also validates the calendar date).
+    try:
+        return date.fromisoformat(head).isoformat()
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(head, fmt).date().isoformat()
+        except ValueError:
+            continue
+    raise ValueError(f"unparseable date: {value!r}")
 
 
 def _map_category(raw_category, merchant: str) -> str:
@@ -237,7 +250,9 @@ def normalize_transactions(raw: list[dict]) -> dict:
         currency = str(_first(row, _CURRENCY_KEYS) or "USD").strip().upper()
         category = _map_category(_first(row, _CATEGORY_KEYS), merchant)
 
-        key = (iso_date, money.round_cents(amount), merchant, account)
+        # Dedupe on the canonical full-precision amount so sub-cent-distinct
+        # transactions (which round to the same cents) are NOT collapsed.
+        key = (iso_date, money.money(amount), merchant, account)
         if key in seen:
             removed += 1
             continue
@@ -334,39 +349,53 @@ def summarize_spending(
     }
 
 
-# Cadence buckets: (label, canonical interval days). Matched by the median gap.
-_CADENCES: list[tuple[str, int, int, int]] = [
-    # (label, low_inclusive, high_inclusive, step_days_for_next_due)
-    ("weekly", 6, 8, 7),
-    ("biweekly", 13, 15, 14),
-    ("monthly", 28, 31, 30),
-    ("annual", 360, 370, 365),
+# Cadence targets in days. The median gap is classified to the NEAREST target
+# (by relative distance) and accepted only if within ±15% of it; otherwise the
+# series is treated as irregular (not recurring). Calendar-aware cadences carry
+# the number of months/years to advance for next_due; data-driven ones (weekly,
+# biweekly) add the observed median gap instead.
+_TOLERANCE = 0.15
+_CADENCE_TARGETS: list[tuple[str, float]] = [
+    ("weekly", 7.0),
+    ("biweekly", 14.0),
+    ("monthly", 30.44),
+    ("quarterly", 91.31),
+    ("annual", 365.25),
 ]
+# Calendar-step (in months) for cadences advanced by month/year arithmetic.
+_CADENCE_MONTHS: dict[str, int] = {"monthly": 1, "quarterly": 3, "annual": 12}
 
 
-def _cadence_for_gap(gap_days: float) -> tuple[str, int] | None:
-    for label, low, high, step in _CADENCES:
-        if low <= gap_days <= high:
-            return label, step
+def _cadence_for_gap(gap_days: float) -> str | None:
+    """Nearest cadence label within ±15% of its target, else None (irregular)."""
+    if gap_days <= 0:
+        return None
+    label, target = min(_CADENCE_TARGETS, key=lambda lt: abs(gap_days - lt[1]))
+    if abs(gap_days - target) <= _TOLERANCE * target:
+        return label
     return None
 
 
-def _add_cadence(last: str, label: str, step: int) -> str:
-    """next_due = last date + one cadence interval, derived from data only."""
+def _add_months(d: date, months: int) -> str:
+    """Advance ``d`` by whole calendar months, clamping the day to month length."""
+    month0 = d.month - 1 + months
+    year = d.year + month0 // 12
+    month = month0 % 12 + 1
+    day = min(d.day, _days_in_month(year, month))
+    return date(year, month, day).isoformat()
+
+
+def _add_cadence(last: str, label: str, median_gap: float) -> str:
+    """next_due = last date + one cadence interval, derived from data only.
+
+    Weekly/biweekly advance by the observed median gap (in whole days); monthly,
+    quarterly, and annual use calendar-aware, day-clamped month/year arithmetic.
+    """
     d = date.fromisoformat(last)
-    if label == "monthly":
-        # Advance one calendar month, clamping the day to the month's length.
-        month = d.month + 1
-        year = d.year + (month - 1) // 12
-        month = (month - 1) % 12 + 1
-        day = min(d.day, _days_in_month(year, month))
-        return date(year, month, day).isoformat()
-    if label == "annual":
-        try:
-            return date(d.year + 1, d.month, d.day).isoformat()
-        except ValueError:  # Feb 29 → Feb 28
-            return date(d.year + 1, d.month, 28).isoformat()
-    return (d + timedelta(days=step)).isoformat()
+    months = _CADENCE_MONTHS.get(label)
+    if months is not None:
+        return _add_months(d, months)
+    return (d + timedelta(days=round(median_gap))).isoformat()
 
 
 def _days_in_month(year: int, month: int) -> int:
@@ -383,12 +412,13 @@ def detect_recurring(transactions: list[dict], detail: str = "summary") -> dict:
     Heuristic: group expenses (amount<0) by merchant; a merchant is recurring
     when it has >=3 charges of similar amount (each within ~5% of the median
     magnitude) at a regular cadence. Cadence comes from the median gap between
-    consecutive (sorted) dates: ~7d weekly, ~14d biweekly, 28-31d monthly,
-    ~365d annual. next_due = last date + one cadence interval, derived purely
-    from the input dates (no real clock).
+    consecutive (sorted) dates, classified to the nearest of {weekly, biweekly,
+    monthly, quarterly, annual} within ±15% (else irregular → not recurring).
+    next_due = last date + one cadence interval, derived purely from the input
+    dates (no real clock). detail='full' adds a per-merchant ``occurrences_list``
+    of {date, amount}; 'summary' omits it.
     """
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
 
     by_merchant: dict[str, list[dict]] = {}
     for t in transactions:
@@ -410,25 +440,22 @@ def detect_recurring(transactions: list[dict], detail: str = "summary") -> dict:
         dates = [date.fromisoformat(c["date"]) for c in charges]
         gaps = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
         median_gap = statistics.median(gaps)
-        cadence = _cadence_for_gap(median_gap)
-        if cadence is None:
+        label = _cadence_for_gap(median_gap)
+        if label is None:
             continue  # irregular spacing
-        label, step = cadence
         last = charges[-1]["date"]
-        recurring.append(
-            {
-                "merchant": merchant,
-                "amount": money.round_cents(median_amt),
-                "cadence": label,
-                "occurrences": len(charges),
-                "next_due": _add_cadence(last, label, step),
-            }
-        )
+        entry = {
+            "merchant": merchant,
+            "amount": money.round_cents(median_amt),
+            "cadence": label,
+            "occurrences": len(charges),
+            "next_due": _add_cadence(last, label, median_gap),
+        }
+        if detail == "full":
+            entry["occurrences_list"] = [{"date": c["date"], "amount": c["amount"]} for c in charges]
+        recurring.append(entry)
 
     recurring.sort(key=lambda r: r["merchant"])
-    # detail gating: 'summary' reports only the headline figures per charge;
-    # 'full' keeps the same rows (already compact) — the flag is honored for
-    # parity with the other modules and future per-occurrence detail.
     out = {
         "recurring": recurring,
         "count": len(recurring),

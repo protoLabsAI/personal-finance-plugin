@@ -4,38 +4,12 @@ core/advanced split (plan §5)."""
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 
 import pytest
+import yaml
 
-CORE_NAMES = {
-    "time_value_of_money",
-    "loan_payment",
-    "loan_amortization",
-    "debt_payoff_strategy",
-    "compound_growth",
-    "savings_goal",
-    "retirement_projection",
-    "budget_breakdown",
-    "emergency_fund_target",
-    "net_worth",
-    "normalize_transactions",
-    "summarize_spending",
-    "income_disruption_runway",
-    "inflation_adjust",
-    # npv + irr are exposed directly by default (plan §10/Q1); only mirr is advanced.
-    "npv",
-    "irr",
-}
-
-ADVANCED_NAMES = {
-    "mirr",
-    "loan_payoff_extra",
-    "debt_to_income",
-    "safe_withdrawal",
-    "cashflow_forecast",
-    "income_replacement_need",
-    "detect_recurring",
-}
+ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
@@ -43,19 +17,39 @@ def tools(plugin):
     return importlib.import_module(plugin.__name__ + ".tools")
 
 
+# Single source of truth lives in tools.py; tests assert against it (no local copy).
+@pytest.fixture
+def CORE_NAMES(tools):
+    return tools.CORE_TOOL_NAMES
+
+
+@pytest.fixture
+def ADVANCED_NAMES(tools):
+    return tools.ADVANCED_TOOL_NAMES
+
+
 def _by_name(tool_list):
     return {t.name: t for t in tool_list}
 
 
 # ── tool sets ─────────────────────────────────────────────────────────────────
-def test_core_set(tools):
+def test_core_set(tools, CORE_NAMES):
     core, _ = tools.build_tools({})
     assert _by_name(core).keys() == CORE_NAMES
 
 
-def test_advanced_set(tools):
+def test_advanced_set(tools, ADVANCED_NAMES):
     _, advanced = tools.build_tools({})
     assert _by_name(advanced).keys() == ADVANCED_NAMES
+
+
+def test_rosters_match_built_tools(tools, CORE_NAMES, ADVANCED_NAMES):
+    # Drift guard: the exported frozensets must equal the names build_tools
+    # actually produces, so the roster can't drift from the real tools.
+    core, advanced = tools.build_tools({})
+    assert frozenset(_by_name(core).keys()) == CORE_NAMES
+    assert frozenset(_by_name(advanced).keys()) == ADVANCED_NAMES
+    assert isinstance(CORE_NAMES, frozenset) and isinstance(ADVANCED_NAMES, frozenset)
 
 
 def test_core_and_advanced_are_disjoint(tools):
@@ -152,3 +146,12 @@ def test_summarize_spending_rejects_half_open_window(tools):
     core = _by_name(tools.build_tools({})[0])
     with pytest.raises(ValueError):
         core["summarize_spending"].invoke({"transactions": [], "start_date": "2024-01-01"})
+
+
+# ── config-default drift guard ────────────────────────────────────────────────
+def test_module_defaults_match_manifest(tools):
+    # The module-level fallback constants must equal the manifest config defaults,
+    # so the two can't drift apart.
+    cfg = yaml.safe_load((ROOT / "protoagent.plugin.yaml").read_text())["config"]
+    assert cfg["default_inflation_rate"] == tools.DEFAULT_INFLATION_RATE
+    assert cfg["default_withdrawal_rate"] == tools.DEFAULT_WITHDRAWAL_RATE

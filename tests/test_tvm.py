@@ -35,6 +35,15 @@ def test_fv_annuity_due(tvm):
     assert tvm.fv(0.05 / 12, 10 * 12, -100, -100, when=1) == pytest.approx(15757.629844104778, abs=TOL)
 
 
+def test_fv_rejects_rate_at_or_below_minus_one(tvm):
+    # rate <= -1 (periodic rate of -100% or worse) is undefined; with a
+    # non-integer nper the old code silently returned a complex number.
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        tvm.fv(-1, 2.5, -100, -100)
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        tvm.fv(-2, 2.5, -100, -100)
+
+
 # ── pv ────────────────────────────────────────────────────────────────────────
 def test_pv_ordinary(tvm):
     assert tvm.pv(0.05 / 12, 10 * 12, -100, 15692.93) == pytest.approx(-100.00067131625819, abs=TOL)
@@ -42,6 +51,13 @@ def test_pv_ordinary(tvm):
 
 def test_pv_zero_rate(tvm):
     assert tvm.pv(0, 12, -100, 1200) == pytest.approx(0.0, abs=TOL)
+
+
+def test_pv_rejects_rate_at_or_below_minus_one(tvm):
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        tvm.pv(-1, 2.5, -100, 100)
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        tvm.pv(-2, 2.5, -100, 100)
 
 
 # ── pmt ───────────────────────────────────────────────────────────────────────
@@ -55,6 +71,13 @@ def test_pmt_short_loan(tvm):
 
 def test_pmt_zero_rate(tvm):
     assert tvm.pmt(0, 12, 2400) == pytest.approx(-200.0, abs=TOL)
+
+
+def test_pmt_rejects_rate_at_or_below_minus_one(tvm):
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        tvm.pmt(-1, 2.5, 2500)
+    with pytest.raises(ValueError, match="rate must be greater than -1"):
+        tvm.pmt(-2, 2.5, 2500)
 
 
 # ── nper ──────────────────────────────────────────────────────────────────────

@@ -45,7 +45,8 @@ def _depletion_age(rate: float, retirement_age: int, years_in_retirement: float,
             return None
     if years_to_deplete <= 0 or years_to_deplete >= years_in_retirement:
         return None
-    return money.round_cents(retirement_age + years_to_deplete)
+    # round to 1 decimal place: this is an AGE (in years), not a currency amount.
+    return round(retirement_age + years_to_deplete, 1)
 
 
 def retirement_projection(
@@ -167,8 +168,13 @@ def safe_withdrawal(
 
     Provide EXACTLY ONE of: nest_egg (→ sustainable_income = nest_egg * rate) or
     target_income (→ required_nest_egg = target_income / rate). rate is the
-    annual withdrawal rate (0.04 == the classic 4% rule); horizon is the planning
-    horizon in years the rule assumes.
+    annual withdrawal rate (0.04 == the classic 4% rule).
+
+    `horizon` is the planning horizon in years the Trinity study assumes, carried
+    here as a documented assumption only: this rule of thumb is HORIZON-INDEPENDENT
+    as implemented (the figure is rate * balance or income / rate and does not vary
+    with horizon). It is echoed under `assumptions` and the summary for honest
+    framing, not used in the computation.
     """
     if rate <= 0:
         raise ValueError("rate must be positive")
@@ -177,39 +183,36 @@ def safe_withdrawal(
     if (nest_egg is None) == (target_income is None):
         raise ValueError("provide exactly one of nest_egg or target_income")
 
+    # rate/horizon are echoed ONLY under assumptions (matching retirement_projection).
     assumptions = {"rate": rate, "horizon": horizon, "rule": "4%/Trinity safe-withdrawal rule of thumb"}
 
     if nest_egg is not None:
         if nest_egg < 0:
             raise ValueError("nest_egg must be non-negative")
         sustainable_income = nest_egg * rate
-        return {
-            "mode": "nest_egg",
-            "rate": rate,
-            "horizon": horizon,
+        mode = "nest_egg"
+        result = {
             "nest_egg": money.round_cents(nest_egg),
             "sustainable_income": money.round_cents(sustainable_income),
-            "assumptions": assumptions,
-            "summary": (
-                f"At a {rate:.1%} withdrawal rate, ${nest_egg:,.0f} supports about "
-                f"${money.round_cents(sustainable_income):,.0f}/yr over ~{horizon} years (4%/Trinity rule). "
-                f"{_CAVEAT}"
-            ),
         }
-
-    if target_income < 0:
-        raise ValueError("target_income must be non-negative")
-    required_nest_egg = target_income / rate
-    return {
-        "mode": "target_income",
-        "rate": rate,
-        "horizon": horizon,
-        "target_income": money.round_cents(target_income),
-        "required_nest_egg": money.round_cents(required_nest_egg),
-        "assumptions": assumptions,
-        "summary": (
+        summary = (
+            f"At a {rate:.1%} withdrawal rate, ${nest_egg:,.0f} supports about "
+            f"${money.round_cents(sustainable_income):,.0f}/yr over a ~{horizon}-year horizon "
+            f"(4%/Trinity rule, horizon-independent). {_CAVEAT}"
+        )
+    else:
+        if target_income < 0:
+            raise ValueError("target_income must be non-negative")
+        required_nest_egg = target_income / rate
+        mode = "target_income"
+        result = {
+            "target_income": money.round_cents(target_income),
+            "required_nest_egg": money.round_cents(required_nest_egg),
+        }
+        summary = (
             f"To draw ${target_income:,.0f}/yr at a {rate:.1%} withdrawal rate you need about "
-            f"${money.round_cents(required_nest_egg):,.0f} over ~{horizon} years (4%/Trinity rule). "
-            f"{_CAVEAT}"
-        ),
-    }
+            f"${money.round_cents(required_nest_egg):,.0f} over a ~{horizon}-year horizon "
+            f"(4%/Trinity rule, horizon-independent). {_CAVEAT}"
+        )
+
+    return {"mode": mode, **result, "assumptions": assumptions, "summary": summary}

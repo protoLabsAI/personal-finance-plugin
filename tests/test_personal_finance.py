@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -12,33 +14,16 @@ from _plugin_testkit import FakeRegistry  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
-CORE_NAMES = {
-    "time_value_of_money",
-    "loan_payment",
-    "loan_amortization",
-    "debt_payoff_strategy",
-    "compound_growth",
-    "savings_goal",
-    "retirement_projection",
-    "budget_breakdown",
-    "emergency_fund_target",
-    "net_worth",
-    "normalize_transactions",
-    "summarize_spending",
-    "income_disruption_runway",
-    "inflation_adjust",
-    "npv",
-    "irr",
-}
-ADVANCED_NAMES = {
-    "mirr",
-    "loan_payoff_extra",
-    "debt_to_income",
-    "safe_withdrawal",
-    "cashflow_forecast",
-    "income_replacement_need",
-    "detect_recurring",
-}
+
+# Tool rosters come from tools.py (single source of truth) — no local copy here.
+@pytest.fixture
+def CORE_NAMES(plugin):
+    return importlib.import_module(plugin.__name__ + ".tools").CORE_TOOL_NAMES
+
+
+@pytest.fixture
+def ADVANCED_NAMES(plugin):
+    return importlib.import_module(plugin.__name__ + ".tools").ADVANCED_TOOL_NAMES
 
 
 def test_register_runs_host_free(plugin, registry):
@@ -46,7 +31,7 @@ def test_register_runs_host_free(plugin, registry):
     assert registry.tools
 
 
-def test_register_binds_core_by_default(plugin):
+def test_register_binds_core_by_default(plugin, CORE_NAMES):
     reg = FakeRegistry()  # no config → advanced off
     plugin.register(reg)
     names = {t.name for t in reg.tools}
@@ -60,14 +45,14 @@ def test_register_registers_skill_dir(plugin):
     assert "skills" in reg.skill_dirs
 
 
-def test_advanced_tools_gated_off_by_default(plugin):
+def test_advanced_tools_gated_off_by_default(plugin, ADVANCED_NAMES):
     reg = FakeRegistry()
     plugin.register(reg)
     names = {t.name for t in reg.tools}
     assert not (names & ADVANCED_NAMES)
 
 
-def test_advanced_tools_enabled_via_config(plugin):
+def test_advanced_tools_enabled_via_config(plugin, CORE_NAMES, ADVANCED_NAMES):
     reg = FakeRegistry({"advanced_tools": True})
     plugin.register(reg)
     names = {t.name for t in reg.tools}

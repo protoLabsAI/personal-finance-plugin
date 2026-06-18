@@ -103,8 +103,8 @@ def test_projection_depletion_age_when_shortfall(retirement):
         expected_return=0.05,
         desired_annual_income=80000,
     )
-    # Drawing 80k/yr from 242,535.97 at 5% depletes ~3.37 yrs in.
-    assert out["depletion_age"] == pytest.approx(68.37, abs=0.01)
+    # Drawing 80k/yr from 242,535.97 at 5% depletes ~3.37 yrs in (age rounded to 1dp).
+    assert out["depletion_age"] == pytest.approx(68.4, abs=0.01)
 
 
 def test_projection_depletion_age_zero_return(retirement):
@@ -218,8 +218,8 @@ def test_projection_ss_offsets_portfolio_draw_in_depletion(retirement):
         desired_annual_income=80000,
         social_security=ss,
     )
-    # Net portfolio draw 80k - 20k = 60k/yr → depletes ~4.63 yrs in.
-    assert out["depletion_age"] == pytest.approx(69.63, abs=0.01)
+    # Net portfolio draw 80k - 20k = 60k/yr → depletes ~4.63 yrs in (age rounded to 1dp).
+    assert out["depletion_age"] == pytest.approx(69.6, abs=0.01)
 
 
 # ── retirement_projection: inflation / real view ────────────────────────────────
@@ -308,7 +308,7 @@ def test_safe_withdrawal_from_nest_egg(retirement):
     out = retirement.safe_withdrawal(nest_egg=1000000)
     assert out["mode"] == "nest_egg"
     assert out["sustainable_income"] == pytest.approx(40000.0, abs=0.01)
-    assert out["rate"] == 0.04
+    assert out["assumptions"]["rate"] == 0.04
 
 
 def test_safe_withdrawal_required_nest_egg(retirement):

@@ -31,18 +31,28 @@ def budget_breakdown(
     """
     if monthly_income <= 0:
         raise ValueError("monthly_income must be positive")
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
 
     total = float(sum(money.money(v) for v in expenses.values()))
     surplus_deficit = monthly_income - total
     savings_rate = surplus_deficit / monthly_income
+
+    # Compute the needs classification (if requested) up front so every flag is
+    # known before `out` and the summary are assembled.
+    actual_needs: float | None = None
+    actual_wants: float | None = None
+    if needs_categories is not None:
+        needs_set = set(needs_categories)
+        actual_needs = float(sum(money.money(v) for k, v in expenses.items() if k in needs_set))
+        actual_wants = total - actual_needs
 
     flags: list[str] = []
     if surplus_deficit < 0:
         flags.append("deficit")
     if savings_rate < 0.20:
         flags.append("savings_below_20pct")
+    if actual_needs is not None and actual_needs > 0.5 * monthly_income:
+        flags.append("needs_over_50pct")
 
     out = {
         "monthly_income": money.round_cents(monthly_income),
@@ -56,11 +66,6 @@ def budget_breakdown(
     }
 
     if needs_categories is not None:
-        needs_set = set(needs_categories)
-        actual_needs = float(sum(money.money(v) for k, v in expenses.items() if k in needs_set))
-        actual_wants = total - actual_needs
-        if actual_needs > 0.5 * monthly_income:
-            flags.append("needs_over_50pct")
         out["actual_needs"] = money.round_cents(actual_needs)
         out["actual_wants"] = money.round_cents(actual_wants)
 
@@ -140,8 +145,7 @@ def net_worth(assets: dict[str, float], liabilities: dict[str, float], detail: s
     assets / liabilities: {name: amount}. detail='full' adds the per-item
     breakdowns (rounded to cents).
     """
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
 
     total_assets = float(sum(money.money(v) for v in assets.values()))
     total_liabilities = float(sum(money.money(v) for v in liabilities.values()))
@@ -178,8 +182,7 @@ def cashflow_forecast(
     """
     if months <= 0:
         raise ValueError("months must be positive")
-    if detail not in ("summary", "full"):
-        raise ValueError("detail must be 'summary' or 'full'")
+    money.validate_detail(detail)
 
     balance = starting_cash
     min_balance: float | None = None
