@@ -13,3 +13,6 @@ __pycache__/
 .venv/
 venv/
 env/
+
+# Internal design doc — kept locally, not published to the remote
+plan.md
