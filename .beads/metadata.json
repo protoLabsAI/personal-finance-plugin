@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "personal_finance_plugin",
+  "project_id": "8884fb26-212e-4749-8e7f-e379775efebd"
+}
