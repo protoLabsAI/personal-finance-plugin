@@ -15,7 +15,7 @@ from . import money
 
 __all__ = ["income_disruption_runway", "income_replacement_need"]
 
-_NOT_ADVICE = "Projection under stated assumptions, not financial advice."
+_NOT_ADVICE = money.NOT_ADVICE
 
 # Cap the simulation so a perpetually-solvent scenario terminates (plan §4G).
 _MAX_MONTHS = 600

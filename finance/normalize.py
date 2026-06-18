@@ -250,9 +250,10 @@ def normalize_transactions(raw: list[dict]) -> dict:
         currency = str(_first(row, _CURRENCY_KEYS) or "USD").strip().upper()
         category = _map_category(_first(row, _CATEGORY_KEYS), merchant)
 
-        # Dedupe on the canonical full-precision amount so sub-cent-distinct
-        # transactions (which round to the same cents) are NOT collapsed.
-        key = (iso_date, money.money(amount), merchant, account)
+        # Dedupe on the canonical cents amount (what we actually emit), so two
+        # charges identical in the output collapse even when their raw floats
+        # differ in binary noise (e.g. a computed qty*price vs a literal).
+        key = (iso_date, money.round_cents(amount), merchant, account)
         if key in seen:
             removed += 1
             continue

@@ -124,6 +124,22 @@ def test_projection_depletion_age_zero_return(retirement):
     assert out["depletion_age"] == pytest.approx(75.0, abs=0.1)
 
 
+def test_projection_depletion_at_horizon_reports_none(retirement):
+    # Funds deplete a hair before life expectancy (~84.97); rounding the age to
+    # 1dp would tie it to 85, so report None (funds effectively last to end of
+    # life) rather than a depletion_age equal to life_expectancy.
+    out = retirement.retirement_projection(
+        current_age=40,
+        retirement_age=65,
+        life_expectancy=85,
+        current_savings=199700,
+        annual_contribution=0,
+        expected_return=0.0,
+        desired_annual_income=10000,
+    )
+    assert out["depletion_age"] is None
+
+
 def test_projection_funds_outlast_reports_none(retirement):
     out = retirement.retirement_projection(
         current_age=30,

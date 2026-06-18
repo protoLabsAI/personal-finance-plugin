@@ -10,7 +10,7 @@ from __future__ import annotations
 def register(registry):
     """Wire this plugin's contributions into the agent (ADR 0018).
 
-    Binds the core-14 tools by default; the advanced set is bound only when the
+    Binds the core tool set by default; the advanced set is bound only when the
     ``advanced_tools`` config flag is set, to keep the agent's tool surface lean
     (plan §5). Reads the plugin's config section for tool defaults.
     """

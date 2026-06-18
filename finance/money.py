@@ -19,6 +19,7 @@ __all__ = [
     "money",
     "validate_detail",
     "inflation_factor",
+    "NOT_ADVICE",
 ]
 
 # How many compounding/payment periods a given frequency has in one year.
@@ -62,6 +63,11 @@ def money(value) -> Decimal:
     if isinstance(value, Decimal):
         return value
     return Decimal(str(value))
+
+
+# The honest-framing disclaimer the modeling tools append to their summaries
+# (plan §1). Single-sourced so the wording stays consistent across tools.
+NOT_ADVICE = "Projection under stated assumptions, not financial advice."
 
 
 def validate_detail(detail: str) -> None:

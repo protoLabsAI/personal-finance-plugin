@@ -355,7 +355,7 @@ def test_detect_recurring_quarterly(normalize):
     assert r["cadence"] == "quarterly"
 
 
-def test_detect_recurring_every_three_weeks_is_biweekly_nearest(normalize):
+def test_detect_recurring_three_week_gap_is_irregular(normalize):
     # ~21d gaps: closest target is biweekly(14) at +50% (out of tol) vs
     # monthly(30.44) at -31% (out of tol) -> irregular, not recurring.
     txns = [
@@ -435,16 +435,17 @@ def test_detect_recurring_summary_omits_occurrences(normalize):
 
 
 # ── dedupe uses full-precision amount (item 4) ────────────────────────────────
-def test_normalize_subcent_amounts_not_deduped(normalize):
+def test_normalize_dedupes_float_noise_identical_amounts(normalize):
+    # Amounts that are identical at the cents granularity (the canonical output)
+    # must dedupe, even when float arithmetic differs in the binary noise — real
+    # connectors compute amounts (qty*price, splits) so this is common.
     raw = [
-        {"date": "2024-01-01", "amount": -10.004, "merchant": "Cafe", "account": "Checking"},
-        {"date": "2024-01-01", "amount": -10.001, "merchant": "Cafe", "account": "Checking"},
+        {"date": "2024-01-01", "amount": -(0.1 + 0.2), "merchant": "Cafe", "account": "Checking"},
+        {"date": "2024-01-01", "amount": -0.3, "merchant": "Cafe", "account": "Checking"},
     ]
     out = normalize.normalize_transactions(raw)
-    # Both round to -10.00 at the cents edge but differ in sub-cent precision;
-    # they must NOT collapse into one row.
-    assert out["count"] == 2
-    assert out["removed_duplicates"] == 0
+    assert out["count"] == 1
+    assert out["removed_duplicates"] == 1
 
 
 # ── _parse_date: broadened formats (item 5) ───────────────────────────────────

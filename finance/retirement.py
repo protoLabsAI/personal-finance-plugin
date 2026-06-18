@@ -16,7 +16,7 @@ from . import money, tvm
 
 __all__ = ["retirement_projection", "safe_withdrawal"]
 
-_CAVEAT = "Projection under stated assumptions, not financial advice."
+_CAVEAT = money.NOT_ADVICE
 
 
 def _sustainable_income(rate: float, years: float, balance: float) -> float:
@@ -46,7 +46,13 @@ def _depletion_age(rate: float, retirement_age: int, years_in_retirement: float,
     if years_to_deplete <= 0 or years_to_deplete >= years_in_retirement:
         return None
     # round to 1 decimal place: this is an AGE (in years), not a currency amount.
-    return round(retirement_age + years_to_deplete, 1)
+    age = round(retirement_age + years_to_deplete, 1)
+    # If rounding pushes the age to/past life expectancy, the funds effectively
+    # last a lifetime — report None rather than a depletion age tying the death
+    # age, which would contradict the funds-outlast framing.
+    if age >= retirement_age + years_in_retirement:
+        return None
+    return age
 
 
 def retirement_projection(
