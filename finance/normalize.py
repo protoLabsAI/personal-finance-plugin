@@ -12,10 +12,15 @@ round to cents at the edge via ``money.round_cents``.
 
 from __future__ import annotations
 
+import re
 import statistics
 from datetime import date, timedelta
 
 from . import money
+
+# Words in an explicit type/kind field that indicate an outflow vs an inflow.
+_DEBIT_WORDS = {"debit", "expense", "withdrawal", "payment", "purchase", "charge", "fee", "pos", "atm"}
+_CREDIT_WORDS = {"credit", "income", "deposit", "refund", "interest", "reimbursement", "payroll"}
 
 __all__ = ["normalize_transactions", "summarize_spending", "detect_recurring"]
 
@@ -165,7 +170,13 @@ def _match_rules(text: str) -> str | None:
         if low == canonical.lower():
             return canonical
     for needle, canonical in _CATEGORY_RULES:
-        if needle in low:
+        # Match on word boundaries so 'gas' doesn't fire inside 'Vegas' nor
+        # 'store' inside 'Restore'. Skip the trailing boundary for needles that
+        # end in punctuation (e.g. 'disney+', 'at&t'), which have no word edge.
+        pattern = r"\b" + re.escape(needle)
+        if needle[-1].isalnum():
+            pattern += r"\b"
+        if re.search(pattern, low):
             return canonical
     return None
 
@@ -176,10 +187,13 @@ def _signed_amount(raw_amount: float, row: dict) -> float:
     kind = _first(row, _TYPE_KEYS)
     magnitude = abs(raw_amount)
     if kind is not None:
-        k = str(kind).strip().lower()
-        if k in ("debit", "expense", "withdrawal"):
+        # Match any indicative word in the type string (e.g. "POS purchase",
+        # "ACH credit"), not just an exact token, so multi-word types still
+        # drive the sign. Debit wins ties ("credit card purchase" is a debit).
+        words = set(str(kind).strip().lower().replace("/", " ").split())
+        if words & _DEBIT_WORDS:
             return -magnitude
-        if k in ("credit", "income", "deposit"):
+        if words & _CREDIT_WORDS:
             return magnitude
     return float(raw_amount)
 

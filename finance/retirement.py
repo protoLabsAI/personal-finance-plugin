@@ -33,11 +33,17 @@ def _depletion_age(rate: float, retirement_age: int, years_in_retirement: float,
     we treat that — and any depletion past the horizon — as "funds outlast"."""
     if draw <= 0:
         return None
-    try:
-        years_to_deplete = tvm.nper(rate, draw, -balance)
-    except ValueError:
-        return None
-    if years_to_deplete >= years_in_retirement:
+    if rate == 0:
+        # tvm.nper's zero-rate branch returns a negative number here (a
+        # documented numpy quirk); the time to deplete a balance with no growth
+        # is simply balance / draw.
+        years_to_deplete = balance / draw
+    else:
+        try:
+            years_to_deplete = tvm.nper(rate, draw, -balance)
+        except ValueError:
+            return None
+    if years_to_deplete <= 0 or years_to_deplete >= years_in_retirement:
         return None
     return money.round_cents(retirement_age + years_to_deplete)
 

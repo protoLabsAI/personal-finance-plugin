@@ -107,6 +107,23 @@ def test_projection_depletion_age_when_shortfall(retirement):
     assert out["depletion_age"] == pytest.approx(68.37, abs=0.01)
 
 
+def test_projection_depletion_age_zero_return(retirement):
+    # expected_return=0 is a valid (cash) assumption. Balance simply divides by
+    # the draw; depletion must land AFTER retirement, never before it (guards the
+    # tvm.nper zero-rate sign quirk that returned a negative number of years).
+    out = retirement.retirement_projection(
+        current_age=30,
+        retirement_age=65,
+        life_expectancy=90,
+        current_savings=1_000_000,
+        annual_contribution=0,
+        expected_return=0.0,
+        desired_annual_income=100000,
+    )
+    # 1,000,000 / 100,000 = 10 years → age 75.
+    assert out["depletion_age"] == pytest.approx(75.0, abs=0.1)
+
+
 def test_projection_funds_outlast_reports_none(retirement):
     out = retirement.retirement_projection(
         current_age=30,

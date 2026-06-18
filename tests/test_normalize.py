@@ -93,7 +93,37 @@ def test_normalize_expense_income_kind_sets_sign(normalize):
     assert out["transactions"][1]["amount"] == 1500.0
 
 
+def test_normalize_unrecognized_debit_type_still_outflow(normalize):
+    # A positive magnitude carrying a debit-like type word ("POS purchase")
+    # must be recorded as an expense, not silently passed through as income.
+    raw = [{"date": "2024-01-01", "amount": 50.0, "merchant": "Shop", "type": "POS purchase"}]
+    out = normalize.normalize_transactions(raw)
+    assert out["transactions"][0]["amount"] == -50.0
+    assert out["transactions"][0]["type"] == "expense"
+
+
 # ── category mapping ──────────────────────────────────────────────────────────
+def test_normalize_category_no_substring_false_match(normalize):
+    # Keywords must match on word boundaries: 'gas' must not fire inside 'Vegas',
+    # nor 'store' inside 'Restore'. Both should fall through to 'Other'.
+    raw = [
+        {"date": "2024-01-01", "amount": -200.0, "merchant": "Las Vegas Hotel"},
+        {"date": "2024-01-02", "amount": -90.0, "merchant": "Restore Spa"},
+    ]
+    out = normalize.normalize_transactions(raw)
+    assert [t["category"] for t in out["transactions"]] == ["Other", "Other"]
+
+
+def test_normalize_category_real_keyword_still_matches(normalize):
+    # The boundary fix must not break legitimate whole-word matches.
+    raw = [
+        {"date": "2024-01-01", "amount": -40.0, "merchant": "Shell Gas Station"},
+        {"date": "2024-01-02", "amount": -12.0, "merchant": "Whole Foods Market"},
+    ]
+    out = normalize.normalize_transactions(raw)
+    assert [t["category"] for t in out["transactions"]] == ["Transport", "Groceries"]
+
+
 def test_normalize_category_from_merchant_keywords(normalize):
     raw = [
         {"date": "2024-01-01", "amount": -20.0, "merchant": "Uber Trip"},

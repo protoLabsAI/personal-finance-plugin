@@ -66,3 +66,12 @@ def test_rejects_unknown_direction(inflation):
 def test_rejects_negative_years(inflation):
     with pytest.raises(ValueError):
         inflation.inflation_adjust(1000, 0.03, -1, "to_present")
+
+
+def test_rejects_rate_at_or_below_minus_one(inflation):
+    # rate <= -100% makes (1+rate) non-positive: division by zero / complex.
+    # Must raise a clean ValueError rather than crash.
+    with pytest.raises(ValueError):
+        inflation.inflation_adjust(1000, -1.0, 10, "to_present")
+    with pytest.raises(ValueError):
+        inflation.inflation_adjust(1000, -2.0, 2.5, "to_future")
