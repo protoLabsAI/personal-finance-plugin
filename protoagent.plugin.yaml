@@ -4,7 +4,16 @@ version: 0.1.0
 description: >-
   Deterministic personal & family finance tools — TVM, projections, budgeting, retirement, transaction normalization.
 enabled: false
+requires_pip: []                 # hand-rolled; zero runtime dependencies
+capabilities: { network: [], filesystem: none }
 config_section: personal_finance
-# Event bus (ADR 0039) — topics this plugin broadcasts / listens for (optional, for discovery):
-# emits: ["personal_finance.something"]
-# subscribes: ["other-plugin.*"]
+config:
+  default_inflation_rate: 0.03   # used when a tool's inflation input is omitted
+  default_withdrawal_rate: 0.04  # safe-withdrawal default
+  currency: USD
+  advanced_tools: false          # §5 opt-in for the niche/advanced tools
+settings:
+  - { key: default_inflation_rate, label: "Default inflation rate", type: number }
+  - { key: default_withdrawal_rate, label: "Safe withdrawal rate", type: number }
+  - { key: currency, label: "Default currency", type: string }
+  - { key: advanced_tools, label: "Expose advanced tools", type: bool }

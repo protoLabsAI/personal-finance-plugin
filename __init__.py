@@ -1,19 +1,27 @@
-"""Personal Finance — a protoAgent plugin (scaffolded by plugin-devkit)."""
+"""Personal Finance — a protoAgent plugin of deterministic finance tools.
+
+Tools-only: the math lives in ``finance/`` (pure, unit-tested), the @tool shims
+in ``tools.py``, and one skill in ``skills/``. No router, surface, or MCP.
+"""
 
 from __future__ import annotations
 
-from langchain_core.tools import tool
-
 
 def register(registry):
-    """Wire this plugin's contributions into the agent (ADR 0018)."""
+    """Wire this plugin's contributions into the agent (ADR 0018).
 
-    @tool
-    def personal_finance_hello(name: str = "world") -> str:
-        """Say hello — replace with your tool's real work."""
-        return f"hello, {name}, from personal-finance"
-    registry.register_tool(personal_finance_hello)
+    Binds the core-14 tools by default; the advanced set is bound only when the
+    ``advanced_tools`` config flag is set, to keep the agent's tool surface lean
+    (plan §5). Reads the plugin's config section for tool defaults.
+    """
+    # Imported lazily (not at module top) so bare-pytest collection of this
+    # repo-root file as a top-level module doesn't hit a parent-less relative
+    # import; under the host loader the package context resolves it.
+    from . import tools
 
-    # Event bus (ADR 0039) — coordinate without importing other plugins:
-    #   registry.emit("did_something", {"id": 1})   # → "personal_finance.did_something" on the bus
-    #   registry.on("other-plugin.*", lambda evt: ...) # react to anyone's events
+    config = getattr(registry, "config", None) or {}
+    core, advanced = tools.build_tools(config)
+    registry.register_tools(core)
+    if config.get("advanced_tools"):
+        registry.register_tools(advanced)
+    registry.register_skill_dir("skills")
