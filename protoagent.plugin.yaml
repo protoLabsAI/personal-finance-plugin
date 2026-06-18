@@ -1,0 +1,10 @@
+id: personal-finance
+name: Personal Finance
+version: 0.1.0
+description: >-
+  Deterministic personal & family finance tools — TVM, projections, budgeting, retirement, transaction normalization.
+enabled: false
+config_section: personal_finance
+# Event bus (ADR 0039) — topics this plugin broadcasts / listens for (optional, for discovery):
+# emits: ["personal_finance.something"]
+# subscribes: ["other-plugin.*"]
