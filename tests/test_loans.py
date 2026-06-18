@@ -139,6 +139,17 @@ def test_debt_strategy_rejects_unknown_method(loans):
         loans.debt_payoff_strategy(DEBTS, budget=500, method="laddering")
 
 
+def test_payoff_order_follows_attack_order_on_same_month_clear(loans):
+    # Two equal-balance debts that both clear in month 1: avalanche attacks the
+    # higher APR first, so it must appear first in payoff_order (not list order).
+    debts = [
+        {"name": "LowAPR", "balance": 100, "apr": 0.01, "min_payment": 10},
+        {"name": "HighAPR", "balance": 100, "apr": 0.30, "min_payment": 10},
+    ]
+    out = loans.debt_payoff_strategy(debts, budget=1000, method="avalanche")
+    assert out["payoff_order"] == ["HighAPR", "LowAPR"]
+
+
 # ── debt_to_income ────────────────────────────────────────────────────────────
 def test_dti_front_and_back_end(loans):
     out = loans.debt_to_income(gross_monthly_income=6000, housing_payment=1500, other_debt_payments=500)
@@ -149,3 +160,10 @@ def test_dti_front_and_back_end(loans):
 def test_dti_rejects_zero_income(loans):
     with pytest.raises(ValueError):
         loans.debt_to_income(gross_monthly_income=0, housing_payment=1500, other_debt_payments=500)
+
+
+def test_dti_rejects_negative_payments(loans):
+    with pytest.raises(ValueError):
+        loans.debt_to_income(6000, -1500, 500)
+    with pytest.raises(ValueError):
+        loans.debt_to_income(6000, 1500, -500)

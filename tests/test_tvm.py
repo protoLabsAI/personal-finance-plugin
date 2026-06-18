@@ -66,6 +66,13 @@ def test_nper_zero_rate(tvm):
     assert tvm.nper(0, -100, 1000) == pytest.approx(-10.0, abs=TOL)
 
 
+def test_nper_unreachable_goal_raises_clean_error(tvm):
+    # Payment below the periodic interest never amortizes: must raise a clear,
+    # domain-specific error, not a cryptic "math domain error" from math.log.
+    with pytest.raises(ValueError, match="never"):
+        tvm.nper(0.05 / 12, -10, 10000)
+
+
 # ── ipmt / ppmt ───────────────────────────────────────────────────────────────
 def test_ipmt_mid_period(tvm):
     assert tvm.ipmt(0.05, 3, 10, -1000) == pytest.approx(41.850781066040696, abs=TOL)
@@ -151,6 +158,14 @@ def test_irr_project(tvm):
 def test_irr_zeroes_npv(tvm):
     values = [-4000, 1200, 1410, 1875, 1050]
     assert tvm.npv(tvm.irr(values), values) == pytest.approx(0.0, abs=TOL)
+
+
+def test_irr_finds_root_in_former_grid_gap(tvm):
+    # [10,-7,1] has two NPV roots (~-0.5 and ~-0.8) that fell in the old grid gap
+    # (-0.9, 0.1). The contiguous grid must now bracket one; verify it zeroes NPV.
+    r = tvm.irr([10, -7, 1])
+    assert tvm.npv(r, [10, -7, 1]) == pytest.approx(0.0, abs=1e-6)
+    assert r > -1
 
 
 def test_irr_raises_when_all_positive(tvm):

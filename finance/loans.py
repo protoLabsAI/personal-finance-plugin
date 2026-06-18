@@ -164,7 +164,7 @@ def _simulate_payoff(debts: list[dict], budget: float, method: str) -> dict:
             pay = min(available, d["balance"])
             d["balance"] -= pay
             available -= pay
-        for d in active:
+        for d in priority:  # record cleared debts in attack order, not list order
             if d["balance"] <= 1e-9 and d["name"] not in order:
                 order.append(d["name"])
     return {"months": months, "total_interest": money.round_cents(total_interest), "payoff_order": order}
@@ -207,6 +207,8 @@ def debt_to_income(gross_monthly_income: float, housing_payment: float, other_de
     (housing + other) / income. Returned as decimals (0.36 == 36%)."""
     if gross_monthly_income <= 0:
         raise ValueError("gross_monthly_income must be positive")
+    if housing_payment < 0 or other_debt_payments < 0:
+        raise ValueError("payments must be non-negative")
     total_debt = housing_payment + other_debt_payments
     front_end = housing_payment / gross_monthly_income
     back_end = total_debt / gross_monthly_income

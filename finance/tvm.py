@@ -61,7 +61,10 @@ def nper(rate: float, pmt: float, pv: float, fv: float = 0.0, when: int = 0) -> 
         # -(fv+pv)/pmt. A known reference quirk; we pin to the reference.
         return (-fv + pv) / pmt
     z = pmt * (1 + rate * when) / rate
-    return math.log((-fv + z) / (pv + z)) / math.log(1 + rate)
+    ratio = (-fv + z) / (pv + z)
+    if ratio <= 0:
+        raise ValueError("nper: the payment never reaches the goal (it does not cover the interest)")
+    return math.log(ratio) / math.log(1 + rate)
 
 
 def _remaining_balance(rate: float, per: int, pmt: float, pv: float, when: int) -> float:
@@ -151,44 +154,57 @@ def rate(
             return rnp1
         rn = rnp1
 
-    return _bisect_rate(nper, pmt, pv, fv, when, tol, maxiter)
+    return _bisect_root(
+        lambda r: _tvm_residual(r, nper, pmt, pv, fv, when),
+        lo_bound=-0.9999,
+        hi_bound=2.0,
+        step=0.005,
+        tol=tol,
+        maxiter=maxiter,
+        name="rate",
+    )
 
 
-def _bisect_rate(nper: float, pmt: float, pv: float, fv: float, when: int, tol: float, maxiter: int) -> float:
-    """Bracket the TVM residual's sign change and bisect. Raises if no bracket."""
+def _bisect_root(f, lo_bound: float, hi_bound: float, step: float, tol: float, maxiter: int, name: str) -> float:
+    """Find a root of `f` on [lo_bound, hi_bound]: scan a CONTIGUOUS grid for a
+    sign change, then bisect it. Shared by rate() and irr() so neither can miss
+    a root that falls between sub-ranges (a single grid has no gaps). Raises
+    ConvergenceError if no bracket is found or bisection stalls.
+    """
 
-    def residual(r: float) -> float:
-        return _tvm_residual(r, nper, pmt, pv, fv, when)
-
-    # Scan a wide plausible band of periodic rates for a sign change.
-    grid = [-0.9999 + 0.0001 * i for i in range(0, 20)] + [0.005 * i for i in range(1, 401)]
-    lo = None
-    for left, right in zip(grid, grid[1:]):
+    def safe(x: float):
         try:
-            fl, fr = residual(left), residual(right)
+            y = f(x)
         except (ZeroDivisionError, OverflowError, ValueError):
-            continue
-        if not (math.isfinite(fl) and math.isfinite(fr)):
-            continue
-        if fl == 0:
-            return left
-        if fl * fr < 0:
-            lo, hi = left, right
-            break
-    if lo is None:
-        raise ConvergenceError("rate: no sign change found — the cash flows have no real periodic rate")
+            return None
+        return y if isinstance(y, (int, float)) and math.isfinite(y) else None
 
-    flo = residual(lo)
+    steps = int(round((hi_bound - lo_bound) / step))
+    left, fleft = lo_bound, safe(lo_bound)
+    lo = hi = flo = None
+    for i in range(1, steps + 1):
+        right = lo_bound + step * i
+        fright = safe(right)
+        if fleft is not None:
+            if fleft == 0:
+                return left
+            if fright is not None and fleft * fright < 0:
+                lo, hi, flo = left, right, fleft
+                break
+        left, fleft = right, fright
+    if lo is None:
+        raise ConvergenceError(f"{name}: no sign change found — no real root in the searched range")
+
     for _ in range(maxiter * 4):
         mid = (lo + hi) / 2
-        fmid = residual(mid)
+        fmid = f(mid)
         if abs(fmid) < tol or (hi - lo) / 2 < tol:
             return mid
         if flo * fmid < 0:
             hi = mid
         else:
             lo, flo = mid, fmid
-    raise ConvergenceError("rate: bisection did not converge")
+    raise ConvergenceError(f"{name}: bisection did not converge")
 
 
 def irr(values, guess: float = 0.1, tol: float = 1e-9, maxiter: int = 100) -> float:
@@ -221,30 +237,8 @@ def irr(values, guess: float = 0.1, tol: float = 1e-9, maxiter: int = 100) -> fl
             return rnp1
         rn = rnp1
 
-    # Bisection fallback: scan for a sign change in NPV(r) above r = -1.
-    grid = [-0.999 + 0.001 * i for i in range(0, 100)] + [0.1 * i for i in range(1, 101)]
-    lo = hi = None
-    for left, right in zip(grid, grid[1:]):
-        fl, fr = f(left), f(right)
-        if fl == 0:
-            return left
-        if math.isfinite(fl) and math.isfinite(fr) and fl * fr < 0:
-            lo, hi = left, right
-            break
-    if lo is None:
-        raise ConvergenceError("irr: no sign change in NPV — the cash flows have no real internal rate of return")
-
-    flo = f(lo)
-    for _ in range(maxiter * 4):
-        mid = (lo + hi) / 2
-        fmid = f(mid)
-        if abs(fmid) < tol or (hi - lo) / 2 < tol:
-            return mid
-        if flo * fmid < 0:
-            hi = mid
-        else:
-            lo, flo = mid, fmid
-    raise ConvergenceError("irr: bisection did not converge")
+    # Bisection fallback over a contiguous band of rates above r = -1.
+    return _bisect_root(f, lo_bound=-0.999, hi_bound=10.0, step=0.01, tol=tol, maxiter=maxiter, name="irr")
 
 
 def mirr(values, finance_rate: float, reinvest_rate: float) -> float:
