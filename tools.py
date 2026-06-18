@@ -112,6 +112,25 @@ def loan_payoff_extra(
 
 
 @tool
+def refinance_breakeven(
+    balance: float,
+    current_apr: float,
+    current_remaining_years: float,
+    new_apr: float,
+    new_term_years: float,
+    closing_costs: float,
+    freq: str = "monthly",
+) -> dict:
+    """Compare staying on a loan vs refinancing the remaining balance: periodic
+    payment under each, monthly savings, and how many periods of savings recoup
+    the closing costs (breakeven). Also reports lifetime interest under each —
+    a longer new term can raise total interest even when the payment drops."""
+    return loans.refinance_breakeven(
+        balance, current_apr, current_remaining_years, new_apr, new_term_years, closing_costs, freq
+    )
+
+
+@tool
 def debt_payoff_strategy(debts: list[dict], budget: float, method: str = "avalanche") -> dict:
     """Order multiple debts for payoff and project months + total interest.
     Each debt is {name, balance, apr, min_payment}. method 'avalanche'
@@ -135,6 +154,32 @@ def savings_goal(
     """Required periodic contribution to reach a savings target in a given
     number of years, accounting for a starting balance and expected return."""
     return growth.savings_goal(target, years, starting_balance, rate, freq)
+
+
+@tool
+def compare_apy(accounts: list[dict]) -> dict:
+    """Rank savings options by effective annual yield (APY). Each account is
+    {name?, rate, freq} where rate is the nominal annual rate (0.05 == 5%) and
+    freq is a compounding frequency ('monthly', 'daily', …, or 'continuous').
+    Returns the options ranked by APY (highest first) and the best one."""
+    return growth.compare_apy(accounts)
+
+
+# ── retirement (advanced, config-free) ───────────────────────────────────────
+@tool
+def rmd(age: int, account_balance: float) -> dict:
+    """Required minimum distribution for a tax-deferred account, using the IRS
+    Uniform Lifetime Table (2022+). RMDs begin at age 73; below that the
+    required amount is zero."""
+    return retirement.rmd(age, account_balance)
+
+
+@tool
+def social_security_estimate(aime: float, claim_age: int = 67, full_retirement_age: int = 67) -> dict:
+    """Simplified Social Security benefit estimate: the PIA from average indexed
+    monthly earnings (AIME) via the bend-point formula, adjusted for claiming
+    before or after full retirement age. A simplified estimate, not advice."""
+    return retirement.social_security_estimate(aime, claim_age, full_retirement_age)
 
 
 # ── budgeting & household ────────────────────────────────────────────────────
@@ -361,8 +406,12 @@ def build_tools(config: dict):
     advanced = [
         mirr,
         loan_payoff_extra,
+        refinance_breakeven,
         debt_to_income,
+        compare_apy,
         safe_withdrawal,
+        rmd,
+        social_security_estimate,
         cashflow_forecast,
         income_replacement_need,
         detect_recurring,
@@ -397,8 +446,12 @@ ADVANCED_TOOL_NAMES = frozenset(
     {
         "mirr",
         "loan_payoff_extra",
+        "refinance_breakeven",
         "debt_to_income",
+        "compare_apy",
         "safe_withdrawal",
+        "rmd",
+        "social_security_estimate",
         "cashflow_forecast",
         "income_replacement_need",
         "detect_recurring",

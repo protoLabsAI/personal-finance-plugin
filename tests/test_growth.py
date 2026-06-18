@@ -91,3 +91,98 @@ def test_savings_goal_rejects_bad_inputs(growth):
         growth.savings_goal(0, 18, rate=0.06)
     with pytest.raises(ValueError):
         growth.savings_goal(100000, 0, rate=0.06)
+
+
+# ── compare_apy ───────────────────────────────────────────────────────────────
+def test_compare_apy_golden_monthly(growth):
+    """5% nominal monthly -> APY = (1 + 0.05/12)**12 - 1 ≈ 0.051161898"""
+    out = growth.compare_apy([{"rate": 0.05, "freq": "monthly"}])
+    assert out["ranked"][0]["apy"] == pytest.approx(0.051161898, abs=1e-6)
+
+
+def test_compare_apy_golden_annual(growth):
+    """5% nominal annual -> APY = 0.05 exactly"""
+    out = growth.compare_apy([{"rate": 0.05, "freq": "annual"}])
+    assert out["ranked"][0]["apy"] == pytest.approx(0.05, abs=1e-6)
+
+
+def test_compare_apy_golden_daily(growth):
+    """5% nominal daily (n=365) -> APY = (1 + 0.05/365)**365 - 1 ≈ 0.051267496"""
+    out = growth.compare_apy([{"rate": 0.05, "freq": "daily"}])
+    assert out["ranked"][0]["apy"] == pytest.approx(0.051267496, abs=1e-6)
+
+
+def test_compare_apy_golden_continuous(growth):
+    """5% continuous -> APY = e**0.05 - 1 ≈ 0.051271096"""
+    out = growth.compare_apy([{"rate": 0.05, "freq": "continuous"}])
+    assert out["ranked"][0]["apy"] == pytest.approx(0.051271096, abs=1e-6)
+
+
+def test_compare_apy_ranking_order(growth):
+    """For equal nominal rate, continuous > daily > monthly > annual."""
+    accounts = [
+        {"name": "annual", "rate": 0.05, "freq": "annual"},
+        {"name": "monthly", "rate": 0.05, "freq": "monthly"},
+        {"name": "daily", "rate": 0.05, "freq": "daily"},
+        {"name": "continuous", "rate": 0.05, "freq": "continuous"},
+    ]
+    out = growth.compare_apy(accounts)
+    names = [r["name"] for r in out["ranked"]]
+    assert names == ["continuous", "daily", "monthly", "annual"]
+
+
+def test_compare_apy_best_matches_top(growth):
+    """best field must equal the name of the highest-APY account."""
+    accounts = [
+        {"name": "low", "rate": 0.03, "freq": "annual"},
+        {"name": "high", "rate": 0.05, "freq": "continuous"},
+    ]
+    out = growth.compare_apy(accounts)
+    assert out["best"] == "high"
+    assert out["ranked"][0]["name"] == "high"
+
+
+def test_compare_apy_default_name(growth):
+    """Missing name defaults to 'option 1', 'option 2', etc."""
+    accounts = [{"rate": 0.05, "freq": "annual"}, {"rate": 0.04, "freq": "monthly"}]
+    out = growth.compare_apy(accounts)
+    names = {r["name"] for r in out["ranked"]}
+    assert "option 1" in names
+    assert "option 2" in names
+
+
+def test_compare_apy_output_keys(growth):
+    """Output dict has ranked, best, and summary."""
+    out = growth.compare_apy([{"rate": 0.05, "freq": "monthly"}])
+    assert "ranked" in out
+    assert "best" in out
+    assert "summary" in out
+    row = out["ranked"][0]
+    assert set(row) >= {"name", "rate", "freq", "apy"}
+
+
+def test_compare_apy_summary_mentions_winner_and_apy(growth):
+    """summary string names the winner and includes APY as a percentage."""
+    out = growth.compare_apy([{"name": "MySavings", "rate": 0.05, "freq": "monthly"}])
+    assert "MySavings" in out["summary"]
+    assert "%" in out["summary"]
+
+
+def test_compare_apy_rejects_empty_list(growth):
+    with pytest.raises(ValueError):
+        growth.compare_apy([])
+
+
+def test_compare_apy_rejects_missing_rate(growth):
+    with pytest.raises(ValueError):
+        growth.compare_apy([{"freq": "monthly"}])
+
+
+def test_compare_apy_rejects_missing_freq(growth):
+    with pytest.raises(ValueError):
+        growth.compare_apy([{"rate": 0.05}])
+
+
+def test_compare_apy_rejects_non_numeric_rate(growth):
+    with pytest.raises(ValueError):
+        growth.compare_apy([{"rate": "five", "freq": "monthly"}])

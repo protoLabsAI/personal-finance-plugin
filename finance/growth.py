@@ -9,9 +9,11 @@ Sign convention is handled internally: callers pass intuitive positive figures
 
 from __future__ import annotations
 
+import math
+
 from . import money, tvm
 
-__all__ = ["compound_growth", "savings_goal"]
+__all__ = ["compound_growth", "savings_goal", "compare_apy"]
 
 
 def compound_growth(
@@ -116,6 +118,54 @@ def savings_goal(
             else f"Save ${money.round_cents(required):,.2f} {freq} to reach ${target:,.0f} in "
             f"{years:g} years at {rate:.1%} (starting from ${starting_balance:,.0f})."
         ),
+    }
+
+
+def compare_apy(accounts: list[dict]) -> dict:
+    """Rank savings options by effective annual yield (APY).
+
+    accounts: list of dicts, each with:
+      - rate: nominal annual rate (0.05 == 5%)
+      - freq: compounding frequency name, or "continuous"
+      - name: optional label (defaults to "option 1", "option 2", ...)
+
+    For "continuous" freq: APY = e**rate - 1.
+    For all others: APY = (1 + rate/n)**n - 1 where n = periods_per_year(freq).
+    Returns ranked (desc by APY), best (name of top option), and summary.
+    """
+    if not accounts:
+        raise ValueError("accounts must be a non-empty list")
+
+    ranked = []
+    for i, account in enumerate(accounts):
+        if "rate" not in account:
+            raise ValueError(f"account at index {i} is missing required field 'rate'")
+        if "freq" not in account:
+            raise ValueError(f"account at index {i} is missing required field 'freq'")
+
+        rate = account["rate"]
+        if not isinstance(rate, (int, float)):
+            raise ValueError(f"account at index {i}: 'rate' must be numeric, got {rate!r}")
+
+        freq = account["freq"]
+        name = account.get("name", f"option {i + 1}")
+
+        if freq == "continuous":
+            apy = math.exp(rate) - 1
+        else:
+            n = money.periods_per_year(freq)
+            apy = (1 + rate / n) ** n - 1
+
+        ranked.append({"name": name, "rate": rate, "freq": freq, "apy": round(apy, 6)})
+
+    ranked.sort(key=lambda r: r["apy"], reverse=True)
+    best = ranked[0]["name"]
+    best_apy = ranked[0]["apy"]
+
+    return {
+        "ranked": ranked,
+        "best": best,
+        "summary": f"{best} offers the highest APY at {best_apy:.4%}.",
     }
 
 

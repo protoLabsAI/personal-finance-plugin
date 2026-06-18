@@ -41,7 +41,8 @@ Returns are typed dicts of figures plus a short `summary` string. Large outputs
 | `inflation_adjust` | real ↔ nominal value |
 
 **Advanced (bound when `advanced_tools` is enabled):** `mirr`,
-`loan_payoff_extra`, `debt_to_income`, `safe_withdrawal`, `cashflow_forecast`,
+`loan_payoff_extra`, `refinance_breakeven`, `debt_to_income`, `compare_apy`,
+`safe_withdrawal`, `rmd`, `social_security_estimate`, `cashflow_forecast`,
 `income_replacement_need`, `detect_recurring`.
 
 ## Composing with a data source

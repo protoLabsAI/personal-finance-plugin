@@ -57,7 +57,7 @@ def test_advanced_tools_enabled_via_config(plugin, CORE_NAMES, ADVANCED_NAMES):
     plugin.register(reg)
     names = {t.name for t in reg.tools}
     assert names == CORE_NAMES | ADVANCED_NAMES
-    assert len(reg.tools) == 23
+    assert len(reg.tools) == 27  # 16 core + 11 advanced
 
 
 def test_skill_present_with_frontmatter():

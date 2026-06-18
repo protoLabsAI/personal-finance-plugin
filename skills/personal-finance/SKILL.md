@@ -53,13 +53,17 @@ back to the closest default tool or ask the operator to enable the advanced set.
 
 - **Loan / mortgage / auto payment, total interest** → `loan_payment`; full
   schedule → `loan_amortization`; effect of paying extra → `loan_payoff_extra`
+  **(advanced)**; whether refinancing pays off → `refinance_breakeven`
   **(advanced)**.
 - **Paying off multiple debts** → `debt_payoff_strategy` (snowball vs avalanche).
 - **Borrowing capacity / lender ratios** → `debt_to_income` **(advanced)**.
 - **Investment / savings growth over time** → `compound_growth`; contribution
-  needed to hit a target → `savings_goal`.
+  needed to hit a target → `savings_goal`; comparing accounts by effective yield
+  → `compare_apy` **(advanced)**.
 - **Retirement readiness** → `retirement_projection`; sustainable spending or
-  required nest egg → `safe_withdrawal` **(advanced)**.
+  required nest egg → `safe_withdrawal` **(advanced)**; required minimum
+  distribution at 73+ → `rmd` **(advanced)**; rough Social Security benefit from
+  AIME → `social_security_estimate` **(advanced)**.
 - **Monthly budget, 50/30/20, savings rate** → `budget_breakdown`; emergency
   fund sizing → `emergency_fund_target`; net worth → `net_worth`; runway of cash
   over coming months → `cashflow_forecast` **(advanced)**.

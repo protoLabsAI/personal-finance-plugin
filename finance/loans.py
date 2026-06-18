@@ -6,9 +6,18 @@ behind a `detail` flag (plan §1/§5).
 
 from __future__ import annotations
 
+import math
+
 from . import money, tvm
 
-__all__ = ["loan_payment", "loan_amortization", "loan_payoff_extra", "debt_payoff_strategy", "debt_to_income"]
+__all__ = [
+    "loan_payment",
+    "loan_amortization",
+    "loan_payoff_extra",
+    "debt_payoff_strategy",
+    "debt_to_income",
+    "refinance_breakeven",
+]
 
 _MAX_MONTHS = 1200  # 100 years — guards against budgets that never clear the debt
 
@@ -223,4 +232,96 @@ def debt_to_income(gross_monthly_income: float, housing_payment: float, other_de
             f"Front-end DTI {front_end:.1%} (housing), back-end DTI {back_end:.1%} (all debt). "
             f"Lenders commonly look for back-end DTI at or below 36%."
         ),
+    }
+
+
+def refinance_breakeven(
+    balance: float,
+    current_apr: float,
+    current_remaining_years: float,
+    new_apr: float,
+    new_term_years: float,
+    closing_costs: float,
+    freq: str = "monthly",
+) -> dict:
+    """Compare staying on the current loan vs refinancing the remaining balance.
+
+    Computes the periodic payment under each scenario using the module's own
+    loan_payment, reports monthly savings and the breakeven period to recoup
+    closing costs, and surfaces the lifetime interest trade-off so that a
+    longer new term's lower payment is weighed against its higher total cost.
+
+    balance: outstanding principal. current_apr/new_apr: nominal annual rates.
+    current_remaining_years/new_term_years: remaining/new loan lengths.
+    closing_costs: upfront refi costs (must be >= 0). freq: payment frequency.
+    """
+    if balance <= 0:
+        raise ValueError("balance must be positive")
+    if current_remaining_years <= 0:
+        raise ValueError("current_remaining_years must be positive")
+    if new_term_years <= 0:
+        raise ValueError("new_term_years must be positive")
+    if closing_costs < 0:
+        raise ValueError("closing_costs must be non-negative")
+    if current_apr < 0:
+        raise ValueError("current_apr must be non-negative")
+    if new_apr < 0:
+        raise ValueError("new_apr must be non-negative")
+
+    ppy = money.periods_per_year(freq)
+    current_periods = round(current_remaining_years * ppy)
+    new_periods = round(new_term_years * ppy)
+
+    # Reuse loan_payment for both scenarios — single source of payment math.
+    current_info = loan_payment(balance, current_apr, current_remaining_years, freq)
+    new_info = loan_payment(balance, new_apr, new_term_years, freq)
+
+    current_payment = current_info["payment"]
+    new_payment = new_info["payment"]
+    monthly_savings = money.round_cents(current_payment - new_payment)
+
+    # Lifetime cost comparison (payment already rounded to cents, so multiply rounded values).
+    current_total_paid = current_payment * current_periods
+    new_total_paid = new_payment * new_periods
+    current_total_interest = money.round_cents(current_total_paid - balance)
+    new_total_interest = money.round_cents(new_total_paid - balance)
+    lifetime_interest_savings = money.round_cents(current_total_interest - new_total_interest)
+
+    if monthly_savings <= 0:
+        breakeven_periods = None
+        breakeven_years = None
+        summary = (
+            f"Refinancing raises the {freq} payment from ${current_payment:,.2f} to ${new_payment:,.2f} "
+            f"(no savings — no breakeven). "
+            f"New loan total interest: ${new_total_interest:,.2f} vs current: ${current_total_interest:,.2f}."
+        )
+    else:
+        if closing_costs == 0:
+            breakeven_periods = 0
+        else:
+            breakeven_periods = math.ceil(closing_costs / monthly_savings)
+        breakeven_years = breakeven_periods / ppy
+        term_note = (
+            " Note: the new term is longer, which raises lifetime interest despite the lower payment."
+            if new_term_years > current_remaining_years
+            else ""
+        )
+        summary = (
+            f"Refi saves ${monthly_savings:,.2f}/{freq} — closing costs recouped in {breakeven_periods} periods "
+            f"({breakeven_years:.1f} years). "
+            f"Lifetime interest: current ${current_total_interest:,.2f}, new ${new_total_interest:,.2f} "
+            f"(${lifetime_interest_savings:,.2f} {'saved' if lifetime_interest_savings >= 0 else 'more'}).{term_note}"
+        )
+
+    return {
+        "balance": money.round_cents(balance),
+        "current_payment": money.round_cents(current_payment),
+        "new_payment": money.round_cents(new_payment),
+        "monthly_savings": monthly_savings,
+        "breakeven_periods": breakeven_periods,
+        "breakeven_years": breakeven_years,
+        "current_total_interest": current_total_interest,
+        "new_total_interest": new_total_interest,
+        "lifetime_interest_savings": lifetime_interest_savings,
+        "summary": summary,
     }

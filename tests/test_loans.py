@@ -181,3 +181,98 @@ def test_dti_rejects_negative_payments(loans):
         loans.debt_to_income(6000, -1500, 500)
     with pytest.raises(ValueError):
         loans.debt_to_income(6000, 1500, -500)
+
+
+# ── refinance_breakeven ───────────────────────────────────────────────────────
+def test_refinance_breakeven_golden(loans):
+    """Golden case: 300k at 7% with 25y remaining, refi to 5% for 25y, $6k closing costs."""
+    out = loans.refinance_breakeven(
+        balance=300_000,
+        current_apr=0.07,
+        current_remaining_years=25,
+        new_apr=0.05,
+        new_term_years=25,
+        closing_costs=6_000,
+    )
+    # Payments computed by calling loan_payment internally — pin to module's own math.
+    assert out["current_payment"] == pytest.approx(2120.34, abs=0.01)
+    assert out["new_payment"] == pytest.approx(1753.77, abs=0.01)
+    assert out["monthly_savings"] == pytest.approx(366.57, abs=0.01)
+    assert out["breakeven_periods"] == 17
+    assert out["breakeven_years"] == pytest.approx(17 / 12, abs=0.01)
+    assert out["balance"] == pytest.approx(300_000, abs=0.01)
+
+
+def test_refinance_breakeven_lifetime_interest(loans):
+    """Lifetime interest comparison for the golden case."""
+    out = loans.refinance_breakeven(
+        balance=300_000,
+        current_apr=0.07,
+        current_remaining_years=25,
+        new_apr=0.05,
+        new_term_years=25,
+        closing_costs=6_000,
+    )
+    assert out["current_total_interest"] == pytest.approx(336_102.00, abs=0.01)
+    assert out["new_total_interest"] == pytest.approx(226_131.00, abs=0.01)
+    assert out["lifetime_interest_savings"] == pytest.approx(109_971.00, abs=0.01)
+
+
+def test_refinance_breakeven_no_savings_when_new_rate_higher(loans):
+    """When the new APR is higher, monthly_savings <= 0 → breakeven_periods is None."""
+    out = loans.refinance_breakeven(
+        balance=200_000,
+        current_apr=0.04,
+        current_remaining_years=20,
+        new_apr=0.06,
+        new_term_years=20,
+        closing_costs=5_000,
+    )
+    assert out["monthly_savings"] == pytest.approx(-220.90, abs=0.01)
+    assert out["breakeven_periods"] is None
+    assert out["breakeven_years"] is None
+    assert "no breakeven" in out["summary"].lower() or "not lower" in out["summary"].lower()
+
+
+def test_refinance_breakeven_zero_closing_costs(loans):
+    """With zero closing costs, breakeven should be 0 periods (immediate)."""
+    out = loans.refinance_breakeven(
+        balance=300_000,
+        current_apr=0.07,
+        current_remaining_years=25,
+        new_apr=0.05,
+        new_term_years=25,
+        closing_costs=0,
+    )
+    assert out["breakeven_periods"] == 0
+    assert out["breakeven_years"] == pytest.approx(0.0, abs=0.01)
+
+
+def test_refinance_breakeven_has_summary_string(loans):
+    out = loans.refinance_breakeven(
+        balance=300_000,
+        current_apr=0.07,
+        current_remaining_years=25,
+        new_apr=0.05,
+        new_term_years=25,
+        closing_costs=6_000,
+    )
+    assert isinstance(out["summary"], str) and out["summary"]
+    # Summary should mention both monthly savings and lifetime interest.
+    assert "$" in out["summary"]
+
+
+def test_refinance_breakeven_validates_inputs(loans):
+    """ValueError on invalid inputs."""
+    with pytest.raises(ValueError):
+        loans.refinance_breakeven(-1, 0.07, 25, 0.05, 25, 6000)  # balance <= 0
+    with pytest.raises(ValueError):
+        loans.refinance_breakeven(300_000, 0.07, 0, 0.05, 25, 6000)  # current term = 0
+    with pytest.raises(ValueError):
+        loans.refinance_breakeven(300_000, 0.07, 25, 0.05, 0, 6000)  # new term = 0
+    with pytest.raises(ValueError):
+        loans.refinance_breakeven(300_000, 0.07, 25, 0.05, 25, -1)  # negative closing costs
+    with pytest.raises(ValueError):
+        loans.refinance_breakeven(300_000, -0.01, 25, 0.05, 25, 6000)  # negative current rate
+    with pytest.raises(ValueError):
+        loans.refinance_breakeven(300_000, 0.07, 25, -0.01, 25, 6000)  # negative new rate
