@@ -237,11 +237,19 @@ def build_tools(config: dict):
 
     @tool
     def summarize_spending(
-        transactions: list[dict], group_by: str = "category", window: tuple | None = None, top_n: int = 5
+        transactions: list[dict],
+        group_by: str = "category",
+        start_date: str | None = None,
+        end_date: str | None = None,
+        top_n: int = 5,
     ) -> dict:
         """Summarize normalized transactions grouped by 'category', 'merchant', or
-        'month': per-group spend, totals, and the top-N groups. window is an
-        optional inclusive (start_iso, end_iso) date filter."""
+        'month': per-group spend, totals, and the top-N groups. start_date and
+        end_date (ISO 'YYYY-MM-DD'), if both given, restrict to that inclusive
+        window."""
+        if (start_date is None) != (end_date is None):
+            raise ValueError("provide both start_date and end_date, or neither")
+        window = (start_date, end_date) if start_date is not None else None
         return normalize.summarize_spending(transactions, group_by, window, top_n)
 
     @tool
@@ -315,10 +323,11 @@ def build_tools(config: dict):
         summarize_spending,
         income_disruption_runway,
         inflation_adjust,
-    ]
-    advanced = [
+        # npv + irr are exposed directly by default (plan §10/Q1); mirr is advanced.
         npv,
         irr,
+    ]
+    advanced = [
         mirr,
         loan_payoff_extra,
         debt_to_income,

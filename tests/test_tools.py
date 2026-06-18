@@ -22,11 +22,12 @@ CORE_NAMES = {
     "summarize_spending",
     "income_disruption_runway",
     "inflation_adjust",
+    # npv + irr are exposed directly by default (plan §10/Q1); only mirr is advanced.
+    "npv",
+    "irr",
 }
 
 ADVANCED_NAMES = {
-    "npv",
-    "irr",
     "mirr",
     "loan_payoff_extra",
     "debt_to_income",
@@ -47,7 +48,7 @@ def _by_name(tool_list):
 
 
 # ── tool sets ─────────────────────────────────────────────────────────────────
-def test_core_set_is_the_fourteen(tools):
+def test_core_set(tools):
     core, _ = tools.build_tools({})
     assert _by_name(core).keys() == CORE_NAMES
 
@@ -127,3 +128,27 @@ def test_normalize_wrapper_returns_canonical(tools):
     core = _by_name(tools.build_tools({})[0])
     out = core["normalize_transactions"].invoke({"raw": [{"date": "2024-01-01", "amount": -20, "merchant": "Uber"}]})
     assert out["transactions"][0]["category"] == "Transport"
+
+
+def test_npv_and_irr_are_core_and_callable(tools):
+    core = _by_name(tools.build_tools({})[0])
+    assert core["npv"].invoke({"rate": 0.0, "values": [-100, 50, 80]})["npv"] == pytest.approx(30.0, abs=1e-9)
+    assert core["irr"].invoke({"values": [-100, 50, 80]})["irr"] > 0
+
+
+def test_summarize_spending_window_via_dates(tools):
+    core = _by_name(tools.build_tools({})[0])
+    txns = [
+        {"date": "2024-01-10", "amount": -10.0, "merchant": "A", "category": "Dining"},
+        {"date": "2024-02-10", "amount": -20.0, "merchant": "B", "category": "Dining"},
+    ]
+    out = core["summarize_spending"].invoke(
+        {"transactions": txns, "group_by": "category", "start_date": "2024-01-01", "end_date": "2024-01-31"}
+    )
+    assert out["total_outflow"] == pytest.approx(10.0, abs=0.01)  # only the January txn
+
+
+def test_summarize_spending_rejects_half_open_window(tools):
+    core = _by_name(tools.build_tools({})[0])
+    with pytest.raises(ValueError):
+        core["summarize_spending"].invoke({"transactions": [], "start_date": "2024-01-01"})

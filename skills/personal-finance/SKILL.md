@@ -47,30 +47,30 @@ the tool, not by you.
 
 ## Choosing a tool
 
+Tools marked **(advanced)** are only bound when the operator has enabled
+`advanced_tools` in the plugin config. If an advanced tool isn't available, fall
+back to the closest default tool or ask the operator to enable the advanced set.
+
 - **Loan / mortgage / auto payment, total interest** → `loan_payment`; full
-  schedule → `loan_amortization`; effect of paying extra → `loan_payoff_extra`.
+  schedule → `loan_amortization`; effect of paying extra → `loan_payoff_extra`
+  **(advanced)**.
 - **Paying off multiple debts** → `debt_payoff_strategy` (snowball vs avalanche).
-- **Borrowing capacity / lender ratios** → `debt_to_income`.
+- **Borrowing capacity / lender ratios** → `debt_to_income` **(advanced)**.
 - **Investment / savings growth over time** → `compound_growth`; contribution
   needed to hit a target → `savings_goal`.
 - **Retirement readiness** → `retirement_projection`; sustainable spending or
-  required nest egg → `safe_withdrawal`.
+  required nest egg → `safe_withdrawal` **(advanced)**.
 - **Monthly budget, 50/30/20, savings rate** → `budget_breakdown`; emergency
   fund sizing → `emergency_fund_target`; net worth → `net_worth`; runway of cash
-  over coming months → `cashflow_forecast`.
-- **Job loss / income gap** → `income_disruption_runway`,
-  `income_replacement_need`.
+  over coming months → `cashflow_forecast` **(advanced)**.
+- **Job loss / income gap** → `income_disruption_runway`;
+  `income_replacement_need` **(advanced)**.
 - **Inflation / real vs nominal value** → `inflation_adjust`.
 - **Generic time-value-of-money** → `time_value_of_money`.
-- **Cash-flow series valuation** (NPV/IRR/MIRR) → `npv`, `irr`, `mirr`.
+- **Cash-flow series valuation** → `npv`, `irr`; modified IRR → `mirr`
+  **(advanced)**.
 - **Analyzing a transaction export** → `normalize_transactions` first, then
-  `summarize_spending` / `detect_recurring`.
-
-Some tools (`npv`, `irr`, `mirr`, `loan_payoff_extra`, `debt_to_income`,
-`safe_withdrawal`, `cashflow_forecast`, `income_replacement_need`,
-`detect_recurring`) are only available when the operator has enabled
-`advanced_tools` in the plugin config; if one isn't present, fall back to the
-closest core tool or ask the operator to enable the advanced set.
+  `summarize_spending`, then `detect_recurring` **(advanced)**.
 
 ## Sign conventions
 

@@ -27,10 +27,10 @@ CORE_NAMES = {
     "summarize_spending",
     "income_disruption_runway",
     "inflation_adjust",
-}
-ADVANCED_NAMES = {
     "npv",
     "irr",
+}
+ADVANCED_NAMES = {
     "mirr",
     "loan_payoff_extra",
     "debt_to_income",
@@ -46,12 +46,12 @@ def test_register_runs_host_free(plugin, registry):
     assert registry.tools
 
 
-def test_register_binds_core_14_by_default(plugin):
+def test_register_binds_core_by_default(plugin):
     reg = FakeRegistry()  # no config → advanced off
     plugin.register(reg)
     names = {t.name for t in reg.tools}
     assert names == CORE_NAMES
-    assert len(reg.tools) == 14
+    assert len(reg.tools) == 16  # the 14 domain tools + npv + irr (plan §10/Q1)
 
 
 def test_register_registers_skill_dir(plugin):

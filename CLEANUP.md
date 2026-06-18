@@ -31,6 +31,15 @@ altitude, and convention improvements to tackle **after** the integration layer.
 
 - [ ] **`budget_breakdown` flags aliasing.** The `needs_over_50pct` flag is appended to `out["flags"]` after `out` is built, relying on list identity and on the summary being assembled afterward. Compute all flags before assembling `out`/summary.
 
+## Integration layer (tools.py / manifest)
+
+- [ ] **`retirement_projection` inflation-default shape inconsistency.** The wrapper injects the config inflation default when `inflation_rate` is omitted, but the engine only adds the `real` block when `inflation_rate > 0`. So omitting the arg silently switches on a 3% real-dollar view, while passing explicit `0.0` suppresses it. Make the behavior consistent (and match the docstring).
+- [ ] **Dead `currency` config knob.** `currency` is declared in the manifest `config` + `settings` but never read by any tool or engine function; SKILL.md tells the agent to "report the currency." Either wire it through (e.g. default-currency for `normalize_transactions`, label outputs) or drop the setting.
+- [ ] **Duplicated rate defaults.** `tools.py` hardcodes `0.03`/`0.04` fallbacks in `config.get(...)` that duplicate the manifest `config` defaults — drift risk if the manifest changes. Single source of truth.
+- [ ] **Tool-name rosters duplicated 3×.** `CORE_NAMES`/`ADVANCED_NAMES` live in `tests/test_tools.py`, `tests/test_personal_finance.py`, and implicitly the lists in `tools.py`. Derive the test sets from `build_tools({})` or export them from `tools.py`.
+- [ ] **`build_tools` is one ~330-line closure.** Only 4 of the wrappers use the config defaults; the other ~19 are pure forwarders that gain nothing from the closure and can't be imported/tested individually. Consider module-level tools for the forwarders + a small closure (or `functools.partial`) for the 4 that need config.
+- [ ] **`time_value_of_money` dispatch duplication.** The `required` dict and the if/elif call chain restate the same per-`solve_for` mapping twice. Collapse into one table mapping `solve_for -> (required_tuple, callable)`.
+
 ## tvm.py / loans.py (earlier deferrals)
 
 - [ ] **`rate`/`irr` step-size-only convergence.** Newton accepts `abs(step) < tol` without checking the residual is ~0, so a stall could return a non-root. (Theoretical; a naive absolute-residual guard risks destabilizing golden tests because residual magnitude scales with cash-flow size — needs a scaled check.)

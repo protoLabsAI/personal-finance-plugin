@@ -88,6 +88,10 @@ def retirement_projection(
     balance_at_retirement = tvm.fv(expected_return, years_to_retire, -annual_contribution, -current_savings)
     sustainable_annual_income = _sustainable_income(expected_return, years_in_retirement, balance_at_retirement)
 
+    if social_security and social_security.get("include"):
+        missing = [k for k in ("annual_benefit", "claim_age") if k not in social_security]
+        if missing:
+            raise ValueError(f"social_security with include=True requires: {', '.join(missing)}")
     ss_included = bool(
         social_security and social_security.get("include") and retirement_age >= social_security["claim_age"]
     )

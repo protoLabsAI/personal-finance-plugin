@@ -156,6 +156,22 @@ def test_projection_ss_included_offsets_income(retirement):
     assert out["surplus_or_shortfall"] == pytest.approx(128429.93, abs=0.01)
 
 
+def test_projection_ss_partial_dict_raises_clean_error(retirement):
+    # include=True but missing claim_age/annual_benefit must raise a clear
+    # ValueError, not a raw KeyError, since the model may emit a partial dict.
+    with pytest.raises(ValueError):
+        retirement.retirement_projection(
+            current_age=40,
+            retirement_age=65,
+            life_expectancy=90,
+            current_savings=100000,
+            annual_contribution=10000,
+            expected_return=0.06,
+            desired_annual_income=50000,
+            social_security={"include": True},
+        )
+
+
 def test_projection_ss_excluded_contributes_nothing(retirement):
     ss = {"annual_benefit": 24000, "claim_age": 65, "include": False}
     out = retirement.retirement_projection(
