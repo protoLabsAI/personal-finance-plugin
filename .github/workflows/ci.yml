@@ -8,15 +8,13 @@ on:
 
 jobs:
   test:
-    # Set the NSC_RUNNER repo variable to the org's Namespace Linux profile to
-    # use it; otherwise falls back to GitHub-hosted ubuntu-latest.
-    runs-on: ${{ vars.NSC_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements-dev.txt ruff
+      - run: pip install -r requirements-dev.txt "ruff==0.15.20"
       # Lint the whole plugin; format-check only tests/ (the generated starter
       # __init__ is yours to shape). Broaden to `ruff format --check .` once you've
       # run `ruff format .` on your code.
