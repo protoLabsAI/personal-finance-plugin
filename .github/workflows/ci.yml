@@ -8,9 +8,7 @@ on:
 
 jobs:
   test:
-    # Set the NSC_RUNNER repo variable to the org's Namespace Linux profile to
-    # use it; otherwise falls back to GitHub-hosted ubuntu-latest.
-    runs-on: ${{ vars.NSC_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -99,7 +99,7 @@ ruff check . && ruff format --check tests/
 ```
 
 CI (`.github/workflows/ci.yml`) runs `ruff` + `pytest` on push and PR (on
-`ubuntu-latest`, or the org's Namespace runner when `NSC_RUNNER` is set).
+a GitHub-hosted `ubuntu-latest` runner).
 
 ## Not financial advice
 
